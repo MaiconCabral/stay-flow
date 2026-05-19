@@ -1,0 +1,38 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "agent": {
+    "laravel-dev": {
+      "description": "Agent specialized in Laravel and PHP development",
+      "mode": "all",
+      "prompt": "{file:.opencode/agents/laravel-dev.md}"
+    },
+    "laravel-architect": {
+      "description": "Agent specialized in Laravel architecture and system design",
+      "mode": "subagent",
+      "prompt": "{file:.opencode/agents/laravel-architect.md}"
+    },
+    "react-specialist": {
+      "description": "Agent specialized in React and frontend development",
+      "mode": "subagent",
+      "prompt": "{file:.opencode/agents/react-specialist.md}"
+    },
+    "vue-specialist": {
+      "description": "Agent specialized in Vue.js and frontend development",
+      "mode": "subagent",
+      "prompt": "{file:.opencode/agents/vue-specialist.md}"
+    },
+    "performance-engineer": {
+      "description": "Agent specialized in performance optimization",
+      "mode": "subagent",
+      "prompt": "{file:.opencode/agents/performance-engineer.md}"
+    },
+    "qa-reviewer": {
+      "description": "Agent specialized in quality assurance and testing",
+      "mode": "subagent",
+      "prompt": "{file:.opencode/agents/qa-reviewer.md}"
+    }
+  },
+  "instructions": [
+    "AGENTS.md"
+  ]
+}
