@@ -22,6 +22,7 @@ return new class extends Migration
             $table->string('zip_code')->nullable();
             $table->enum('property_type', ['house', 'apartment', 'villa', 'cabin', 'cottage', 'loft', 'studio', 'other'])->default('apartment');
             $table->decimal('price_per_night', 10, 2);
+            $table->decimal('cleaning_fee', 10, 2);
             $table->integer('max_guests');
             $table->integer('bedrooms');
             $table->integer('bathrooms');

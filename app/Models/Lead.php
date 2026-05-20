@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\LeadStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -20,6 +21,13 @@ class Lead extends Model
         'status',
         'converted_to_reservation_id',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'status' => LeadStatus::class,
+        ];
+    }
 
     public function property(): BelongsTo
     {

@@ -22,6 +22,7 @@ return new class extends Migration
             $table->enum('status', ['pending', 'confirmed', 'cancelled', 'completed'])->default('pending');
             $table->timestamp('cancelled_at')->nullable();
             $table->text('cancelled_reason')->nullable();
+            $table->text('notes')->nullable();
             $table->timestamps();
         });
     }

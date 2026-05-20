@@ -2,6 +2,9 @@
 
 namespace App\Models;
 
+use App\Domain\User\User;
+use App\Enums\PropertyStatus;
+use App\Enums\PropertyType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,6 +18,8 @@ class Property extends Model
     protected $fillable = [
         'host_id',
         'title',
+        'slug',
+        'type',
         'description',
         'address',
         'city',
@@ -23,12 +28,15 @@ class Property extends Model
         'zip_code',
         'property_type',
         'price_per_night',
+        'cleaning_fee',
         'max_guests',
         'bedrooms',
         'bathrooms',
         'latitude',
         'longitude',
         'status',
+        'check_in_time',
+        'check_out_time',
     ];
 
     protected function casts(): array
@@ -37,6 +45,8 @@ class Property extends Model
             'price_per_night' => 'decimal:2',
             'latitude' => 'decimal:8',
             'longitude' => 'decimal:8',
+            'property_type' => PropertyType::class,
+            'status' => PropertyStatus::class,
         ];
     }
 
@@ -65,7 +75,7 @@ class Property extends Model
         return $this->hasMany(Lead::class);
     }
 
-    public function availabilities(): HasMany
+    public function availabilityBlocks(): HasMany
     {
         return $this->hasMany(Availability::class);
     }

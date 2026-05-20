@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Domain\User\User;
+use App\Enums\BookingStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -37,6 +39,7 @@ class Reservation extends Model
             'cleaning_fee' => 'decimal:2',
             'total_price' => 'decimal:2',
             'cancelled_at' => 'datetime',
+            'status' => BookingStatus::class,
         ];
     }
 

@@ -11,12 +11,13 @@ return new class extends Migration
         Schema::create('availabilities', function (Blueprint $table) {
             $table->id();
             $table->foreignId('property_id')->constrained()->onDelete('cascade');
-            $table->date('date');
+            $table->time('start_date');
+            $table->time('end_date');
             $table->boolean('is_available')->default(true);
             $table->decimal('price', 10, 2)->nullable();
             $table->timestamps();
 
-            $table->unique(['property_id', 'date']);
+            $table->unique(['property_id', 'start_date', 'end_date']);
         });
     }
 
