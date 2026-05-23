@@ -6,31 +6,50 @@
 
 ## Stack
 
-- Laravel 12
-- Inertia.js
-- React
-- Javascript
-- CSS
-- SASS
+- Laravel 12 (`backend/`)
+- Next.js + React (`frontend/`)
+- JavaScript / TypeScript
+- CSS / Tailwind CSS
 - MySQL
 - Redis
 - SQS
-- Vite
+
+## Monorepo Structure
+
+```
+/
+├── backend/          # Laravel API (PHP)
+├── frontend/         # Next.js app (React)
+├── .gitignore
+└── AGENTS.md
+```
 
 ## Commands
 
+### Backend (`cd backend/`)
 - `composer test` - PHPUnit tests
-- `npm run dev` - Vite dev server
+- `npm run dev` - Vite dev server (Laravel assets)
 - `php artisan serve` - Laravel dev server
+
+### Frontend (`cd frontend/`)
+- `npm run dev` - Next.js dev server
+- `npm run build` - Next.js build
 
 ## Conventions
 
-- Controllers: `app/Http/Controllers/`
-- Models: `app/Models/`
-- Views: `resources/views/`
-- Routes: `routes/web.php`
-- Migrations: `database/migrations/`
-- Tests: `tests/Feature/` and `tests/Unit/`
+### Backend
+- Controllers: `backend/app/Http/Controllers/`
+- Models: `backend/app/Models/`
+- Views: `backend/resources/views/`
+- Routes: `backend/routes/web.php`
+- Migrations: `backend/database/migrations/`
+- Tests: `backend/tests/Feature/` and `backend/tests/Unit/`
+
+### Frontend
+- Components: `frontend/src/components/`
+- Pages: `frontend/src/app/` (App Router)
+- Hooks: `frontend/src/hooks/`
+- Lib: `frontend/src/lib/`
 
 # Backend Rules
 
