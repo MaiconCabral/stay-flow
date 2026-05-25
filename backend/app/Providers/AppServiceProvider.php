@@ -6,6 +6,7 @@ use App\Domain\Availability\Repositories\AvailabilityRepositoryInterface;
 use App\Domain\Lead\Repositories\LeadRepositoryInterface;
 use App\Domain\Message\Repositories\ConversationRepositoryInterface;
 use App\Domain\Message\Repositories\MessageRepositoryInterface;
+use App\Domain\Notification\Repositories\NotificationRepositoryInterface;
 use App\Domain\Payment\Contracts\PaymentGatewayInterface;
 use App\Domain\Payment\Repositories\PaymentRepositoryInterface;
 use App\Domain\Property\Repositories\PropertyRepositoryInterface;
@@ -18,6 +19,7 @@ use App\Infrastructure\PaymentGateways\FakePaymentGateway;
 use App\Infrastructure\Persistence\Repositories\EloquentConversationRepository;
 use App\Infrastructure\Persistence\Repositories\EloquentLeadRepository;
 use App\Infrastructure\Persistence\Repositories\EloquentMessageRepository;
+use App\Infrastructure\Persistence\Repositories\EloquentNotificationRepository;
 use App\Infrastructure\Persistence\Repositories\EloquentPaymentRepository;
 use App\Infrastructure\Persistence\Repositories\EloquentPropertyRepository;
 use App\Infrastructure\Persistence\Repositories\EloquentReservationRepository;
@@ -83,6 +85,11 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(
             MessageRepositoryInterface::class,
             EloquentMessageRepository::class,
+        );
+
+        $this->app->bind(
+            NotificationRepositoryInterface::class,
+            EloquentNotificationRepository::class,
         );
     }
 

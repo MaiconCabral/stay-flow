@@ -30,6 +30,8 @@ class User extends Authenticatable
         'phone',
         'avatar',
         'is_host',
+        'notification_settings',
+        'payout_settings',
     ];
 
     protected $hidden = [
@@ -44,6 +46,8 @@ class User extends Authenticatable
             'password' => 'hashed',
             'role' => UserRole::class,
             'is_host' => 'boolean',
+            'notification_settings' => 'array',
+            'payout_settings' => 'array',
         ];
     }
 

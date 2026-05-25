@@ -22,6 +22,9 @@ class EloquentConversationRepository implements ConversationRepositoryInterface
     public function paginateByUser(int $userId, array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
         $query = Conversation::with(['property', 'guest', 'host', 'lastMessage'])
+            ->withCount(['messages as unread_count' => function ($q) use ($userId) {
+                $q->whereNull('read_at')->where('sender_id', '!=', $userId);
+            }])
             ->where('guest_id', $userId)
             ->orWhere('host_id', $userId);
 

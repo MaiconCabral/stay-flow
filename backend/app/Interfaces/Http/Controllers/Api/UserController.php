@@ -6,9 +6,12 @@ use App\Application\User\DTOs\UserData;
 use App\Application\User\Services\UserService;
 use App\Interfaces\Http\Requests\User\StoreUserRequest;
 use App\Interfaces\Http\Requests\User\UpdateUserRequest;
+use App\Interfaces\Http\Requests\User\UploadAvatarRequest;
 use App\Interfaces\Http\Resources\UserResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use RuntimeException;
 
 class UserController
 {
@@ -62,5 +65,28 @@ class UserController
         $this->userService->delete($id);
 
         return response()->json(null, 204);
+    }
+
+    public function uploadAvatar(UploadAvatarRequest $request, int $id): JsonResponse
+    {
+        $user = $this->userService->find($id);
+
+        $file = $request->file('image');
+        $path = $file->store('avatars', 'public');
+
+        if ($path === false) {
+            return response()->json(['message' => 'Falha ao fazer upload do avatar.'], 500);
+        }
+
+        // Delete old avatar if it was stored locally
+        if ($user->avatar && str_starts_with($user->avatar, Storage::url(''))) {
+            $oldPath = str_replace(Storage::url(''), '', $user->avatar);
+            Storage::disk('public')->delete($oldPath);
+        }
+
+        $data = UserData::fromArray(['avatar' => Storage::url($path)]);
+        $user = $this->userService->update($id, $data);
+
+        return response()->json(new UserResource($user));
     }
 }

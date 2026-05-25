@@ -21,6 +21,7 @@ class ConversationResource extends JsonResource
             'status_label' => $this->status?->label(),
             'last_message_at' => $this->last_message_at?->toISOString(),
             'last_message_preview' => $this->last_message_preview,
+            'unread_count' => (int) ($this->unread_count ?? 0),
             'property' => $this->whenLoaded('property', fn () => [
                 'id' => $this->property->id,
                 'title' => $this->property->title,
