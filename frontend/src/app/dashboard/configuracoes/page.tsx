@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   User,
   Bell,
@@ -14,9 +14,19 @@ import {
   Check,
   AlertTriangle,
   Loader2,
+  Upload,
+  X,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { updateUser, deleteUser } from '@/lib/user'
+import api from '@/lib/api'
+import type { User as AuthUser } from '@/lib/auth'
+import {
+  fetchSettings,
+  updateNotificationSettings,
+  updatePayoutSettings,
+} from '@/lib/settings'
+import type { NotificationSettings, PayoutSettings } from '@/lib/settings'
 import type { AxiosError } from 'axios'
 
 type TabKey = 'profile' | 'notifications' | 'payments' | 'account'
@@ -155,10 +165,13 @@ function RadioGroup({ label, value, onChange, options }: {
 
 function ProfileTab() {
   const { user } = useAuth()
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
+  const [avatarUrl, setAvatarUrl] = useState('')
   const [loading, setLoading] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
 
@@ -167,6 +180,7 @@ function ProfileTab() {
       setName(user.name)
       setEmail(user.email)
       setPhone(user.phone ?? '')
+      setAvatarUrl(user.avatar ?? '')
     }
   }, [user])
 
@@ -174,9 +188,10 @@ function ProfileTab() {
     ? user.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
     : '??'
 
-  const canSave = name.trim() !== (user?.name ?? '')
+  const hasChanges = name.trim() !== (user?.name ?? '')
     || email.trim() !== (user?.email ?? '')
     || phone.trim() !== (user?.phone ?? '')
+    || avatarUrl !== (user?.avatar ?? '')
 
   const handleSave = useCallback(async () => {
     if (!user) return
@@ -187,6 +202,7 @@ function ProfileTab() {
         name: name.trim(),
         email: email.trim(),
         phone: phone.trim() || undefined,
+        avatar: avatarUrl || undefined,
       })
       localStorage.setItem('auth_user', JSON.stringify(updated))
       setSaved(true)
@@ -200,15 +216,42 @@ function ProfileTab() {
     } finally {
       setLoading(false)
     }
-  }, [user, name, email, phone])
+  }, [user, name, email, phone, avatarUrl])
+
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !user) return
+
+    setUploading(true)
+    setError('')
+    try {
+      const formData = new FormData()
+      formData.append('image', file)
+      const { data } = await api.post<AuthUser>(`/users/${user.id}/avatar`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      setAvatarUrl(data.avatar ?? '')
+      localStorage.setItem('auth_user', JSON.stringify(data))
+    } catch (err: unknown) {
+      const axiosErr = err as AxiosError<{ message: string }>
+      setError(axiosErr.response?.data?.message ?? 'Erro ao fazer upload.')
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }, [user])
+
+  const handleRemoveAvatar = useCallback(() => {
+    setAvatarUrl('')
+  }, [])
 
   if (!user) return null
 
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        {user.avatar ? (
-          <img src={user.avatar} alt="" className="w-16 h-16 rounded-full object-cover flex-shrink-0" />
+        {avatarUrl ? (
+          <img src={avatarUrl} alt="" className="w-16 h-16 rounded-full object-cover flex-shrink-0" />
         ) : (
           <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center text-white text-xl font-bold flex-shrink-0">
             {initials}
@@ -226,6 +269,48 @@ function ProfileTab() {
         </div>
       )}
 
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-text-primary">Avatar</label>
+        <div className="flex items-center gap-3">
+          <input
+            type="text"
+            value={avatarUrl}
+            onChange={(e) => setAvatarUrl(e.target.value)}
+            placeholder="URL da imagem"
+            className="flex-1 px-3 py-2.5 rounded-lg bg-surface border border-border text-sm text-text-primary placeholder:text-text-secondary outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+          />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={handleFileUpload}
+            className="hidden"
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="flex items-center gap-1.5 px-3 py-2.5 rounded-lg bg-surface border border-border text-text-secondary text-sm font-medium hover:bg-primary-light hover:text-primary transition-colors disabled:opacity-40"
+          >
+            {uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+            Upload
+          </button>
+          {avatarUrl && (
+            <button
+              type="button"
+              onClick={handleRemoveAvatar}
+              className="flex items-center gap-1.5 px-3 py-2.5 rounded-lg bg-surface border border-border text-text-secondary text-sm font-medium hover:bg-error/10 hover:text-error transition-colors"
+            >
+              <X size={16} />
+              Remover
+            </button>
+          )}
+        </div>
+        <p className="text-xs text-text-secondary">
+          Formatos aceitos: JPEG, PNG, WebP. Máximo 5MB.
+        </p>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <InputField label="Nome completo" value={name} onChange={setName} />
         <InputField label="E-mail" value={email} onChange={setEmail} type="email" />
@@ -235,7 +320,7 @@ function ProfileTab() {
       <div className="flex items-center gap-3 pt-2">
         <button
           onClick={handleSave}
-          disabled={!canSave || loading}
+          disabled={!hasChanges || loading}
           className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {loading ? <Loader2 size={16} className="animate-spin" /> : saved ? <Check size={16} /> : <Save size={16} />}
@@ -250,55 +335,97 @@ function ProfileTab() {
 }
 
 function NotificationsTab() {
-  const [newBooking, setNewBooking] = useState(true)
-  const [cancellations, setCancellations] = useState(true)
-  const [messages, setMessages] = useState(true)
-  const [reviews, setReviews] = useState(true)
-  const [reminders, setReminders] = useState(false)
-  const [weeklyReport, setWeeklyReport] = useState(true)
+  const [settings, setSettings] = useState<NotificationSettings | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [error, setError] = useState('')
 
-  const handleSave = useCallback(() => {
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    fetchSettings()
+      .then((res) => { if (!cancelled) setSettings(res.notifications) })
+      .catch(() => { if (!cancelled) setError('Erro ao carregar preferências') })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
   }, [])
+
+  const update = useCallback((key: keyof NotificationSettings, value: boolean) => {
+    setSettings((prev) => prev ? { ...prev, [key]: value } : prev)
+  }, [])
+
+  const handleSave = useCallback(async () => {
+    if (!settings) return
+    setSaving(true)
+    setError('')
+    try {
+      await updateNotificationSettings(settings)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    } catch {
+      setError('Erro ao salvar. Tente novamente.')
+    } finally {
+      setSaving(false)
+    }
+  }, [settings])
+
+  if (loading) {
+    return (
+      <div className="space-y-4 animate-pulse">
+        {[...Array(6)].map((_, i) => (
+          <div key={i} className="h-14 rounded-lg bg-surface/50" />
+        ))}
+      </div>
+    )
+  }
+
+  if (!settings) {
+    return <p className="text-sm text-text-secondary">Não foi possível carregar as preferências.</p>
+  }
 
   return (
     <div className="space-y-6">
+      {error && (
+        <div className="p-3 rounded-lg bg-error/10 border border-error/30 text-sm text-error font-medium text-center">
+          {error}
+        </div>
+      )}
+
       <div className="divide-y divide-border">
         <Toggle
-          checked={newBooking}
-          onChange={setNewBooking}
+          checked={settings.new_booking}
+          onChange={(v) => update('new_booking', v)}
           label="Novas reservas"
           description="Notificar quando um hóspede fizer uma reserva"
         />
         <Toggle
-          checked={cancellations}
-          onChange={setCancellations}
+          checked={settings.cancellations}
+          onChange={(v) => update('cancellations', v)}
           label="Cancelamentos"
           description="Notificar quando uma reserva for cancelada"
         />
         <Toggle
-          checked={messages}
-          onChange={setMessages}
+          checked={settings.messages}
+          onChange={(v) => update('messages', v)}
           label="Mensagens de hóspedes"
           description="Notificar quando receber uma nova mensagem"
         />
         <Toggle
-          checked={reviews}
-          onChange={setReviews}
+          checked={settings.reviews}
+          onChange={(v) => update('reviews', v)}
           label="Avaliações recebidas"
           description="Notificar quando um hóspede deixar uma avaliação"
         />
         <Toggle
-          checked={reminders}
-          onChange={setReminders}
+          checked={settings.reminders}
+          onChange={(v) => update('reminders', v)}
           label="Lembretes de check-in/out"
           description="Lembrar sobre check-ins e check-outs do dia"
         />
         <Toggle
-          checked={weeklyReport}
-          onChange={setWeeklyReport}
+          checked={settings.weekly_report}
+          onChange={(v) => update('weekly_report', v)}
           label="Relatório semanal de ganhos"
           description="Receber um resumo dos ganhos toda segunda-feira"
         />
@@ -306,10 +433,11 @@ function NotificationsTab() {
 
       <button
         onClick={handleSave}
-        className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors"
+        disabled={saving}
+        className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
       >
-        {saved ? <Check size={16} /> : <Save size={16} />}
-        {saved ? 'Salvo!' : 'Salvar preferências'}
+        {saving ? <Loader2 size={16} className="animate-spin" /> : saved ? <Check size={16} /> : <Save size={16} />}
+        {saving ? 'Salvando...' : saved ? 'Salvo!' : 'Salvar preferências'}
       </button>
     </div>
   )
@@ -317,22 +445,83 @@ function NotificationsTab() {
 
 function PaymentsTab() {
   const [method, setMethod] = useState('pix')
-  const [pixKey, setPixKey] = useState('maria@stayflow.com')
-  const [bank, setBank] = useState('Nubank')
-  const [agency, setAgency] = useState('0001')
-  const [account, setAccount] = useState('12345-6')
+  const [pixKey, setPixKey] = useState('')
+  const [bank, setBank] = useState('')
+  const [agency, setAgency] = useState('')
+  const [account, setAccount] = useState('')
   const [paypalEmail, setPaypalEmail] = useState('')
   const [threshold, setThreshold] = useState('100')
   const [schedule, setSchedule] = useState('weekly')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [error, setError] = useState('')
 
-  const handleSave = useCallback(() => {
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    fetchSettings()
+      .then((res) => {
+        if (cancelled) return
+        const p = res.payout
+        setMethod(p.method)
+        setPixKey(p.pix_key || '')
+        setBank(p.bank || '')
+        setAgency(p.agency || '')
+        setAccount(p.account || '')
+        setPaypalEmail(p.paypal_email || '')
+        setThreshold(String(p.threshold))
+        setSchedule(p.schedule)
+      })
+      .catch(() => { if (!cancelled) setError('Erro ao carregar dados de pagamento') })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
   }, [])
+
+  const handleSave = useCallback(async () => {
+    setSaving(true)
+    setError('')
+    try {
+      await updatePayoutSettings({
+        method,
+        pix_key: pixKey || undefined,
+        bank: bank || undefined,
+        agency: agency || undefined,
+        account: account || undefined,
+        paypal_email: paypalEmail || undefined,
+        threshold: Number(threshold),
+        schedule,
+      } as Partial<PayoutSettings>)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    } catch {
+      setError('Erro ao salvar. Tente novamente.')
+    } finally {
+      setSaving(false)
+    }
+  }, [method, pixKey, bank, agency, account, paypalEmail, threshold, schedule])
+
+  if (loading) {
+    return (
+      <div className="space-y-4 animate-pulse">
+        <div className="h-16 rounded-lg bg-surface/50" />
+        <div className="h-10 rounded-lg bg-surface/50" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="h-16 rounded-lg bg-surface/50" />
+          <div className="h-16 rounded-lg bg-surface/50" />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
+      {error && (
+        <div className="p-3 rounded-lg bg-error/10 border border-error/30 text-sm text-error font-medium text-center">
+          {error}
+        </div>
+      )}
+
       <RadioGroup
         label="Método de recebimento"
         value={method}
@@ -392,10 +581,11 @@ function PaymentsTab() {
 
       <button
         onClick={handleSave}
-        className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors"
+        disabled={saving}
+        className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
       >
-        {saved ? <Check size={16} /> : <Save size={16} />}
-        {saved ? 'Salvo!' : 'Salvar informações'}
+        {saving ? <Loader2 size={16} className="animate-spin" /> : saved ? <Check size={16} /> : <Save size={16} />}
+        {saving ? 'Salvando...' : saved ? 'Salvo!' : 'Salvar informações'}
       </button>
     </div>
   )
@@ -568,10 +758,18 @@ function AccountTab() {
 }
 
 export default function ConfiguracoesPage() {
-  const [activeTab, setActiveTab] = useState<TabKey>('profile')
+  const searchParams = useSearchParams()
+  const paramTab = searchParams.get('tab') as TabKey | null
+  const [activeTab, setActiveTab] = useState<TabKey>(paramTab ?? 'profile')
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => { setMounted(true) }, [])
+
+  useEffect(() => {
+    if (paramTab && tabs.some((t) => t.key === paramTab)) {
+      setActiveTab(paramTab)
+    }
+  }, [paramTab])
 
   const ActiveIcon = tabs.find((t) => t.key === activeTab)?.icon ?? User
 

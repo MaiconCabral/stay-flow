@@ -5,10 +5,11 @@ import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import type { EventClickArg } from '@fullcalendar/core'
-import { Search, SlidersHorizontal, CalendarDays, List, CalendarCheck } from 'lucide-react'
+import { Search, SlidersHorizontal, CalendarDays, List, CalendarCheck, Building2, User } from 'lucide-react'
 import Link from 'next/link'
 import BookingModal from '../_components/booking-modal'
 import { fetchReservations, type ReservationResource } from '@/lib/reservation'
+import { useAuth } from '@/contexts/AuthContext'
 
 const tabs = [
   { key: 'all', label: 'Todas' },
@@ -16,6 +17,13 @@ const tabs = [
   { key: 'pending', label: 'Pendentes' },
   { key: 'cancelled', label: 'Canceladas' },
   { key: 'completed', label: 'Concluídas' },
+]
+
+const guestTabs = [
+  { key: 'all', label: 'Todas' },
+  { key: 'confirmed', label: 'Ativas' },
+  { key: 'completed', label: 'Concluídas' },
+  { key: 'cancelled', label: 'Canceladas' },
 ]
 
 const statusLabel: Record<string, string> = {
@@ -50,20 +58,34 @@ function getInitials(name: string): string {
 }
 
 export default function ReservasPage() {
+  const { user } = useAuth()
   const [reservations, setReservations] = useState<ReservationResource[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState('all')
   const [search, setSearch] = useState('')
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar')
+  const [viewFilter, setViewFilter] = useState<'host' | 'guest'>('host')
   const [selectedReservation, setSelectedReservation] = useState<ReservationResource | null>(null)
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('view') === 'guest') {
+      setViewFilter('guest')
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
     setLoading(true)
     setError(null)
 
-    fetchReservations({ per_page: 100 })
+    const params: Record<string, string | number> = { per_page: 100 }
+    if (viewFilter === 'guest' && user?.id) {
+      params.guest_id = user.id
+    }
+
+    fetchReservations(params)
       .then((res) => {
         if (!cancelled) setReservations(res.data)
       })
@@ -75,7 +97,9 @@ export default function ReservasPage() {
       })
 
     return () => { cancelled = true }
-  }, [])
+  }, [viewFilter, user?.id])
+
+  const activeTabs = viewFilter === 'guest' ? guestTabs : tabs
 
   const filtered = useMemo(() => {
     let list = reservations
@@ -107,7 +131,9 @@ export default function ReservasPage() {
     () =>
       filtered.map((r) => ({
         id: String(r.id),
-        title: r.guest?.name ?? 'Hóspede',
+        title: viewFilter === 'guest'
+          ? (r.property?.title ?? 'Imóvel')
+          : (r.guest?.name ?? 'Hóspede'),
         start: r.check_in,
         end: r.check_out,
         backgroundColor: eventColors[r.status]?.bg ?? '#94A3B8',
@@ -115,7 +141,7 @@ export default function ReservasPage() {
         textColor: '#fff',
         extendedProps: { reservation: r },
       })),
-    [filtered]
+    [filtered, viewFilter]
   )
 
   const handleEventClick = useCallback((info: EventClickArg) => {
@@ -181,10 +207,38 @@ export default function ReservasPage() {
         </div>
       </div>
 
+      {/* View Filter (Host / Guest) */}
+      <div className="flex items-center gap-2">
+        <div className="flex bg-card border border-border rounded-lg overflow-hidden">
+          <button
+            onClick={() => { setViewFilter('host'); setActiveTab('all'); setSearch('') }}
+            className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors duration-150 ${
+              viewFilter === 'host'
+                ? 'bg-primary text-white'
+                : 'text-text-secondary hover:text-text-primary'
+            }`}
+          >
+            <Building2 size={16} />
+            <span className="hidden sm:inline">Anfitrião</span>
+          </button>
+          <button
+            onClick={() => { setViewFilter('guest'); setActiveTab('all'); setSearch('') }}
+            className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors duration-150 ${
+              viewFilter === 'guest'
+                ? 'bg-primary text-white'
+                : 'text-text-secondary hover:text-text-primary'
+            }`}
+          >
+            <User size={16} />
+            <span className="hidden sm:inline">Hóspede</span>
+          </button>
+        </div>
+      </div>
+
       {/* Tabs + View Toggle */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex gap-1 overflow-x-auto scrollbar-none pb-0.5">
-          {tabs.map((tab) => (
+          {activeTabs.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
@@ -304,8 +358,11 @@ export default function ReservasPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border bg-surface/50">
-                      <th className="text-left py-3.5 px-4 text-xs font-medium text-text-secondary uppercase tracking-wider">Hóspede</th>
-                      <th className="text-left py-3.5 px-4 text-xs font-medium text-text-secondary uppercase tracking-wider">Imóvel</th>
+                      {viewFilter === 'guest' ? (
+                        <th className="text-left py-3.5 px-4 text-xs font-medium text-text-secondary uppercase tracking-wider">Imóvel</th>
+                      ) : (
+                        <th className="text-left py-3.5 px-4 text-xs font-medium text-text-secondary uppercase tracking-wider">Hóspede</th>
+                      )}
                       <th className="text-left py-3.5 px-4 text-xs font-medium text-text-secondary uppercase tracking-wider">Check-in</th>
                       <th className="text-left py-3.5 px-4 text-xs font-medium text-text-secondary uppercase tracking-wider">Check-out</th>
                       <th className="text-left py-3.5 px-4 text-xs font-medium text-text-secondary uppercase tracking-wider">Status</th>
@@ -320,17 +377,28 @@ export default function ReservasPage() {
                         onClick={() => setSelectedReservation(r)}
                       >
                         <td className="py-3.5 px-4">
-                          <Link href={`/dashboard/imoveis/${r.property_id}`} className="flex items-center gap-2.5 hover:text-primary transition-colors" onClick={(e) => e.stopPropagation()}>
-                            <div className="w-8 h-8 rounded-full bg-primary-light text-primary flex items-center justify-center text-xs font-semibold">
-                              {getInitials(r.guest?.name ?? '??')}
-                            </div>
-                            <div>
-                              <span className="font-medium text-text-primary">{r.guest?.name ?? 'Hóspede'}</span>
-                              <span className="block text-[11px] text-text-secondary">#{r.id}</span>
-                            </div>
-                          </Link>
+                          {viewFilter === 'guest' ? (
+                            <Link href={`/imoveis/${r.property_id}`} className="flex items-center gap-2.5 hover:text-primary transition-colors" onClick={(e) => e.stopPropagation()}>
+                              <div className="w-8 h-8 rounded-lg bg-primary-light text-primary flex items-center justify-center text-xs font-semibold">
+                                {r.property?.title ? getInitials(r.property.title) : '--'}
+                              </div>
+                              <div>
+                                <span className="font-medium text-text-primary">{r.property?.title ?? 'Imóvel'}</span>
+                                <span className="block text-[11px] text-text-secondary">#{r.id}</span>
+                              </div>
+                            </Link>
+                          ) : (
+                            <Link href={`/dashboard/imoveis/${r.property_id}`} className="flex items-center gap-2.5 hover:text-primary transition-colors" onClick={(e) => e.stopPropagation()}>
+                              <div className="w-8 h-8 rounded-full bg-primary-light text-primary flex items-center justify-center text-xs font-semibold">
+                                {getInitials(r.guest?.name ?? '??')}
+                              </div>
+                              <div>
+                                <span className="font-medium text-text-primary">{r.guest?.name ?? 'Hóspede'}</span>
+                                <span className="block text-[11px] text-text-secondary">#{r.id}</span>
+                              </div>
+                            </Link>
+                          )}
                         </td>
-                        <td className="py-3.5 px-4 text-text-secondary">{r.property?.title ?? '—'}</td>
                         <td className="py-3.5 px-4 text-text-secondary">{formatDate(r.check_in)}</td>
                         <td className="py-3.5 px-4 text-text-secondary">{formatDate(r.check_out)}</td>
                         <td className="py-3.5 px-4">
@@ -355,21 +423,35 @@ export default function ReservasPage() {
                     onClick={() => setSelectedReservation(r)}
                   >
                     <div className="flex items-start justify-between gap-2 mb-2">
-                      <Link href={`/dashboard/imoveis/${r.property_id}`} className="flex items-center gap-2.5 min-w-0" onClick={(e) => e.stopPropagation()}>
-                        <div className="w-9 h-9 rounded-full bg-primary-light text-primary flex items-center justify-center text-xs font-semibold flex-shrink-0">
-                          {getInitials(r.guest?.name ?? '??')}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-text-primary truncate">{r.guest?.name ?? 'Hóspede'}</p>
-                          <p className="text-xs text-text-secondary truncate">#{r.id}</p>
-                        </div>
-                      </Link>
+                      {viewFilter === 'guest' ? (
+                        <Link href={`/imoveis/${r.property_id}`} className="flex items-center gap-2.5 min-w-0" onClick={(e) => e.stopPropagation()}>
+                          <div className="w-9 h-9 rounded-lg bg-primary-light text-primary flex items-center justify-center text-xs font-semibold flex-shrink-0">
+                            {r.property?.title ? getInitials(r.property.title) : '--'}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-text-primary truncate">{r.property?.title ?? 'Imóvel'}</p>
+                            <p className="text-xs text-text-secondary truncate">#{r.id}</p>
+                          </div>
+                        </Link>
+                      ) : (
+                        <Link href={`/dashboard/imoveis/${r.property_id}`} className="flex items-center gap-2.5 min-w-0" onClick={(e) => e.stopPropagation()}>
+                          <div className="w-9 h-9 rounded-full bg-primary-light text-primary flex items-center justify-center text-xs font-semibold flex-shrink-0">
+                            {getInitials(r.guest?.name ?? '??')}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-text-primary truncate">{r.guest?.name ?? 'Hóspede'}</p>
+                            <p className="text-xs text-text-secondary truncate">#{r.id}</p>
+                          </div>
+                        </Link>
+                      )}
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap flex-shrink-0 ${statusStyles[r.status] ?? ''}`}>
                         {statusLabel[r.status] ?? r.status_label}
                       </span>
                     </div>
                     <div className="ml-11 space-y-1 text-xs text-text-secondary">
-                      <p>{r.property?.title ?? '—'}</p>
+                      {viewFilter === 'guest' && r.property?.title && (
+                        <p className="text-text-primary font-medium">{r.property.title}</p>
+                      )}
                       <p>{formatDate(r.check_in)} → {formatDate(r.check_out)}</p>
                       <p className="font-semibold text-text-primary">R$ {Number(r.total_price).toLocaleString('pt-BR')}</p>
                     </div>

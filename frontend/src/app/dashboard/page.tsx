@@ -12,60 +12,36 @@ import PropertyOverview from './_components/property-overview'
 import type { PropertySummary } from './_components/property-overview'
 import { fetchReservations, type ReservationResource } from '@/lib/reservation'
 import { fetchProperties, type PropertyResource } from '@/lib/property'
+import { fetchEarnings, type EarningsData } from '@/lib/earnings'
 
 const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
-
-function getInitials(name: string): string {
-  return name
-    .split(' ')
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2)
-}
-
-function getLast6Months(): { label: string; year: number; month: number }[] {
-  const now = new Date()
-  const result: { label: string; year: number; month: number }[] = []
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    result.push({ label: monthNames[d.getMonth()], year: d.getFullYear(), month: d.getMonth() })
-  }
-  return result
-}
-
-function isSameMonth(dateStr: string, year: number, month: number): boolean {
-  const d = new Date(dateStr + 'T12:00:00')
-  return d.getFullYear() === year && d.getMonth() === month
-}
 
 function isActiveReservation(r: ReservationResource): boolean {
   return r.status === 'confirmed' || r.status === 'pending'
 }
 
-function computeDashboardData(reservations: ReservationResource[], properties: PropertyResource[]) {
+function computeDashboardData(reservations: ReservationResource[], properties: PropertyResource[], earnings?: EarningsData | null) {
   const now = new Date()
   const today = now.toISOString().split('T')[0]
-  const currentYear = now.getFullYear()
-  const currentMonth = now.getMonth()
-
-  const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1
-  const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear
 
   const paidReservations = reservations.filter(
     (r) => r.status === 'confirmed' || r.status === 'completed'
   )
 
-  // Current month revenue
-  const currentRevenue = paidReservations
-    .filter((r) => isSameMonth(r.check_in, currentYear, currentMonth))
-    .reduce((sum, r) => sum + r.total_price, 0)
+  // Revenue from earnings API
+  const currentMonthIdx = now.getMonth() + 1
+  const prevMonthIdx = currentMonthIdx === 1 ? 12 : currentMonthIdx - 1
+  const prevMonthYear = currentMonthIdx === 1 ? now.getFullYear() - 1 : now.getFullYear()
 
-  // Previous month revenue
-  const prevRevenue = paidReservations
-    .filter((r) => isSameMonth(r.check_in, prevYear, prevMonth))
-    .reduce((sum, r) => sum + r.total_price, 0)
+  const currentMonthData = earnings?.monthly?.find(
+    (m) => m.month === currentMonthIdx && m.year === now.getFullYear()
+  )
+  const prevMonthData = earnings?.monthly?.find(
+    (m) => m.month === prevMonthIdx && m.year === prevMonthYear
+  )
 
+  const currentRevenue = currentMonthData?.gross ?? 0
+  const prevRevenue = prevMonthData?.gross ?? 0
   const revenueChange = prevRevenue > 0 ? ((currentRevenue - prevRevenue) / prevRevenue) * 100 : 0
 
   // Active reservations (confirmed or pending with future/current check-in)
@@ -150,12 +126,9 @@ function computeDashboardData(reservations: ReservationResource[], properties: P
     },
   ]
 
-  const months = getLast6Months()
-  const monthlyRevenue: MonthlyRevenueData[] = months.map((m) => ({
-    month: m.label,
-    revenue: paidReservations
-      .filter((r) => isSameMonth(r.check_in, m.year, m.month))
-      .reduce((sum, r) => sum + r.total_price, 0),
+  const monthlyRevenue: MonthlyRevenueData[] = (earnings?.monthly ?? []).map((m) => ({
+    month: monthNames[m.month - 1],
+    revenue: m.gross,
   }))
 
   const chartChangePercent =
@@ -233,6 +206,7 @@ function computeDashboardData(reservations: ReservationResource[], properties: P
 export default function DashboardPage() {
   const [reservations, setReservations] = useState<ReservationResource[]>([])
   const [properties, setProperties] = useState<PropertyResource[]>([])
+  const [earnings, setEarnings] = useState<EarningsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -244,16 +218,18 @@ export default function DashboardPage() {
         const oneMonthLater = new Date()
         oneMonthLater.setMonth(oneMonthLater.getMonth() + 1)
 
-        const [reservationsRes, propertiesRes] = await Promise.all([
+        const [reservationsRes, propertiesRes, earningsRes] = await Promise.all([
           fetchReservations({
             date_from: sixMonthsAgo.toISOString().split('T')[0],
             date_to: oneMonthLater.toISOString().split('T')[0],
             per_page: 200,
           }),
           fetchProperties({ per_page: 100 }),
+          fetchEarnings({ months: 6 }),
         ])
         setReservations(reservationsRes.data)
         setProperties(propertiesRes.data)
+        setEarnings(earningsRes)
       } catch {
         setError('Erro ao carregar dados do dashboard')
       } finally {
@@ -295,7 +271,7 @@ export default function DashboardPage() {
     )
   }
 
-  const data = computeDashboardData(reservations, properties)
+  const data = computeDashboardData(reservations, properties, earnings)
 
   return (
     <div className="space-y-5">

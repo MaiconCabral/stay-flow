@@ -1,9 +1,11 @@
 'use client'
 
 import { useEffect, useCallback, useState } from 'react'
-import { X, Home, Calendar, Moon, DollarSign, Eye, Pencil, AlertTriangle, Loader2, Ban } from 'lucide-react'
+import { X, Home, Calendar, Moon, DollarSign, Eye, Pencil, AlertTriangle, Loader2, Ban, Star } from 'lucide-react'
 import Link from 'next/link'
 import { cancelReservation, type ReservationResource } from '@/lib/reservation'
+import { createReview } from '@/lib/review'
+import { useAuth } from '@/contexts/AuthContext'
 import type { AxiosError } from 'axios'
 
 const statusStyles: Record<string, string> = {
@@ -40,11 +42,18 @@ export default function BookingModal({
   reservation: ReservationResource
   onClose: () => void
 }) {
+  const { user } = useAuth()
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
   const [cancelling, setCancelling] = useState(false)
   const [cancelError, setCancelError] = useState('')
   const [cancelled, setCancelled] = useState(false)
+  const [showReview, setShowReview] = useState(false)
+  const [reviewRating, setReviewRating] = useState(0)
+  const [reviewComment, setReviewComment] = useState('')
+  const [reviewSubmitting, setReviewSubmitting] = useState(false)
+  const [reviewError, setReviewError] = useState('')
+  const [reviewSuccess, setReviewSuccess] = useState(false)
 
   const handleKey = useCallback(
     (e: KeyboardEvent) => {
@@ -184,6 +193,91 @@ export default function BookingModal({
                   {statusLabel[reservation.status] ?? reservation.status_label}
                 </span>
               </div>
+
+              {/* Review section */}
+              {reservation.status === 'completed' && user?.id === reservation.guest_id && !reviewSuccess && (
+                <div className="space-y-3">
+                  {!showReview ? (
+                    <button
+                      onClick={() => setShowReview(true)}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-primary/50 text-primary text-sm font-medium hover:bg-primary/5 transition-colors"
+                    >
+                      <Star size={16} />
+                      Avaliar estadia
+                    </button>
+                  ) : (
+                    <div className="space-y-3 p-3 rounded-lg border border-primary/20 bg-primary/5">
+                      <p className="text-xs font-semibold text-text-primary">Avalie sua estadia</p>
+                      <div className="flex items-center gap-1">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <button
+                            key={star}
+                            onClick={() => setReviewRating(star)}
+                            className={`p-0.5 transition-colors ${
+                              star <= reviewRating ? 'text-amber-400' : 'text-text-secondary/30'
+                            }`}
+                          >
+                            <Star size={20} fill={star <= reviewRating ? 'currentColor' : 'none'} />
+                          </button>
+                        ))}
+                      </div>
+                      <textarea
+                        value={reviewComment}
+                        onChange={(e) => setReviewComment(e.target.value)}
+                        placeholder="Compartilhe sua experiência..."
+                        rows={3}
+                        className="w-full px-3 py-2 rounded-lg bg-surface border border-border text-sm text-text-primary placeholder:text-text-secondary outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors resize-none"
+                      />
+                      {reviewError && <p className="text-xs text-error">{reviewError}</p>}
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={async () => {
+                            if (reviewRating === 0 || !reviewComment.trim()) {
+                              setReviewError('Selecione uma nota e escreva um comentário.')
+                              return
+                            }
+                            setReviewSubmitting(true)
+                            setReviewError('')
+                            try {
+                              await createReview(reservation.property_id, {
+                                reservation_id: reservation.id,
+                                rating: reviewRating,
+                                comment: reviewComment.trim(),
+                              })
+                              setReviewSuccess(true)
+                              setShowReview(false)
+                            } catch (err: unknown) {
+                              const axiosErr = err as { response?: { data?: { message?: string } } }
+                              setReviewError(axiosErr.response?.data?.message ?? 'Erro ao enviar avaliação.')
+                            } finally {
+                              setReviewSubmitting(false)
+                            }
+                          }}
+                          disabled={reviewSubmitting || reviewRating === 0 || !reviewComment.trim()}
+                          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-40"
+                        >
+                          {reviewSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Star size={16} />}
+                          {reviewSubmitting ? 'Enviando...' : 'Enviar avaliação'}
+                        </button>
+                        <button
+                          onClick={() => { setShowReview(false); setReviewError(''); setReviewRating(0); setReviewComment('') }}
+                          disabled={reviewSubmitting}
+                          className="px-4 py-2 rounded-lg border border-border text-text-secondary text-sm font-medium hover:bg-surface transition-colors disabled:opacity-40"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {reviewSuccess && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-success/5 border border-success/20">
+                  <Star size={16} className="text-success flex-shrink-0" />
+                  <p className="text-xs text-success font-medium">Avaliação enviada com sucesso!</p>
+                </div>
+              )}
 
               {reservation.notes && (
                 <div className="p-3 rounded-lg border border-border">

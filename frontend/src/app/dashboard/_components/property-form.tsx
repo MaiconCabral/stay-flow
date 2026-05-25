@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { Save, Check, Loader2, ChevronDown, ChevronUp, Search } from 'lucide-react'
-import type { PropertyResource } from '@/lib/property'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { Save, Check, Loader2, ChevronDown, ChevronUp, Search, Upload, Trash2, Star } from 'lucide-react'
+import type { PropertyResource, UploadedImage } from '@/lib/property'
+import { uploadPropertyImage, deletePropertyImage, setPropertyImageCover } from '@/lib/property'
 import { buscarCep, formatCep } from '@/lib/cep'
 import MapPicker from '@/components/MapPicker'
 
@@ -176,9 +177,23 @@ export default function PropertyForm({ initialData, onSubmit, loading, serverErr
   const [localErrors, setLocalErrors] = useState<Record<string, string>>({})
   const [cepLoading, setCepLoading] = useState(false)
   const [cepError, setCepError] = useState('')
+  const [images, setImages] = useState<UploadedImage[]>([])
+  const [uploading, setUploading] = useState(false)
+  const [imageError, setImageError] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     setForm(toFormData(initialData))
+    if (initialData?.images) {
+      setImages(initialData.images.map((img) => ({
+        id: img.id,
+        image_url: img.image_url,
+        is_cover: img.is_cover,
+        order: img.order,
+      })))
+    } else {
+      setImages([])
+    }
   }, [initialData])
 
   const update = useCallback((field: keyof PropertyFormData, value: string) => {
@@ -233,6 +248,51 @@ export default function PropertyForm({ initialData, onSubmit, loading, serverErr
     }))
   }, [])
 
+  const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !initialData?.id) return
+
+    setUploading(true)
+    setImageError('')
+    try {
+      const uploaded = await uploadPropertyImage(initialData.id, file, images.length === 0)
+      setImages((prev) => [...prev, uploaded])
+    } catch (err: unknown) {
+      console.error('[Upload Error]', err)
+      const axiosErr = err as { response?: { data?: { message?: string; errors?: Record<string, string[]> }; status?: number }; message?: string }
+      const serverMsg = axiosErr?.response?.data?.message
+      const serverErr = axiosErr?.response?.data?.errors?.image?.[0]
+      const status = axiosErr?.response?.status
+      const netErr = axiosErr?.message
+      setImageError(`(${status || 'erro'}) ${serverErr || serverMsg || netErr || 'Erro ao fazer upload'}`)
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }, [initialData?.id, images.length])
+
+  const handleImageDelete = useCallback(async (imageId: number) => {
+    if (!initialData?.id) return
+    setImageError('')
+    try {
+      await deletePropertyImage(initialData.id, imageId)
+      setImages((prev) => prev.filter((img) => img.id !== imageId))
+    } catch {
+      setImageError('Erro ao remover imagem. Tente novamente.')
+    }
+  }, [initialData?.id])
+
+  const handleSetCover = useCallback(async (imageId: number) => {
+    if (!initialData?.id) return
+    setImageError('')
+    try {
+      await setPropertyImageCover(initialData.id, imageId)
+      setImages((prev) => prev.map((img) => ({ ...img, is_cover: img.id === imageId })))
+    } catch {
+      setImageError('Erro ao definir imagem como capa. Tente novamente.')
+    }
+  }, [initialData?.id])
+
   const validate = useCallback((): boolean => {
     const errs: Record<string, string> = {}
     if (!form.title.trim()) errs.title = 'Título é obrigatório'
@@ -266,8 +326,8 @@ export default function PropertyForm({ initialData, onSubmit, loading, serverErr
       max_guests: Number(form.max_guests),
       bedrooms: Number(form.bedrooms),
       bathrooms: Number(form.bathrooms),
-      check_in_time: form.check_in_time || null,
-      check_out_time: form.check_out_time || null,
+      check_in_time: form.check_in_time ? form.check_in_time + ':00' : null,
+      check_out_time: form.check_out_time ? form.check_out_time + ':00' : null,
       latitude: form.latitude ? Number(form.latitude) : null,
       longitude: form.longitude ? Number(form.longitude) : null,
     }
@@ -490,6 +550,76 @@ export default function PropertyForm({ initialData, onSubmit, loading, serverErr
           </div>
         )}
       </div>
+
+      {/* Images */}
+      {initialData?.id && (
+        <div className="bg-card rounded-xl border border-border p-5 sm:p-6">
+          <h2 className="text-sm font-semibold text-text-primary mb-4 pb-3 border-b border-border">Imagens</h2>
+
+          {imageError && (
+            <div className="mb-4 px-3 py-2 rounded-lg bg-error/10 border border-error/30 text-xs text-error">
+              {imageError}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-4">
+            {images.map((img) => (
+              <div key={img.id} className="relative group aspect-[4/3] rounded-lg overflow-hidden border border-border bg-surface">
+                <img src={img.image_url} alt="" className="w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                  {!img.is_cover && (
+                    <button
+                      type="button"
+                      onClick={() => handleSetCover(img.id)}
+                      className="w-8 h-8 rounded-full bg-white/90 flex items-center justify-center text-text-primary hover:bg-white transition-colors"
+                      title="Definir como capa"
+                    >
+                      <Star size={14} />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleImageDelete(img.id)}
+                    className="w-8 h-8 rounded-full bg-white/90 flex items-center justify-center text-error hover:bg-white transition-colors"
+                    title="Remover imagem"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+                {img.is_cover && (
+                  <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-primary text-white text-[10px] font-semibold">
+                    Capa
+                  </div>
+                )}
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="aspect-[4/3] rounded-lg border-2 border-dashed border-border hover:border-primary/50 bg-surface hover:bg-card transition-colors flex flex-col items-center justify-center gap-1.5 disabled:opacity-40"
+            >
+              {uploading ? (
+                <Loader2 size={20} className="animate-spin text-text-secondary" />
+              ) : (
+                <Upload size={20} className="text-text-secondary" />
+              )}
+              <span className="text-[11px] text-text-secondary font-medium">
+                {uploading ? 'Enviando...' : 'Upload'}
+              </span>
+            </button>
+          </div>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,.jpg,.jpeg"
+            onChange={handleImageUpload}
+            className="hidden"
+          />
+          <p className="text-[11px] text-text-secondary">Formatos: JPEG, PNG, WebP · Máx. 10MB</p>
+        </div>
+      )}
 
       <div className="flex items-center gap-3 pt-2">
         <button
