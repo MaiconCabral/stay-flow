@@ -105,6 +105,15 @@ export async function createReservation(data: CreateReservationData): Promise<Re
   return response.data
 }
 
+export async function updateReservation(id: number, data: Partial<CreateReservationData>): Promise<ReservationResource> {
+  const response = await api.put<ReservationResource>(`/reservations/${id}`, data)
+  return response.data
+}
+
+export async function deleteReservation(id: number): Promise<void> {
+  await api.delete(`/reservations/${id}`)
+}
+
 export async function cancelReservation(id: number, reason: string): Promise<ReservationResource> {
   const response = await api.post<ReservationResource>(`/reservations/${id}/cancel`, { reason })
   return response.data
