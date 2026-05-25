@@ -1,18 +1,20 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Menu, X } from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
 
 const navLinks = [
   { href: '#', label: 'Descobrir' },
   { href: '#', label: 'Destinos' },
-  { href: '#', label: 'Para Anfitriões' },
+  { href: '#', label: 'Para AnfitriÃµes' },
 ]
 
 export default function PublicHeader() {
   const [scrolled, setScrolled] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const { user, logout, isAuthenticated } = useAuth()
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10)
@@ -25,13 +27,11 @@ export default function PublicHeader() {
     return () => { document.body.style.overflow = '' }
   }, [drawerOpen])
 
+  const headerClass = 'fixed top-0 left-0 right-0 z-50 bg-card transition-shadow duration-200' + (scrolled ? ' shadow-sm border-b border-border' : '')
+
   return (
     <>
-      <header
-        className={`fixed top-0 left-0 right-0 z-50 bg-card transition-shadow duration-200 ${
-          scrolled ? 'shadow-sm border-b border-border' : ''
-        }`}
-      >
+      <header className={headerClass}>
         <div className="max-w-7xl mx-auto px-4 lg:px-6">
           <div className="flex items-center justify-between h-16">
             <Link href="/" className="flex items-center gap-2.5 flex-shrink-0">
@@ -54,18 +54,37 @@ export default function PublicHeader() {
             </nav>
 
             <div className="hidden md:flex items-center gap-3">
-              <Link
-                href="/login"
-                className="px-4 py-2 rounded-lg border border-border text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface transition-colors"
-              >
-                Anunciar
-              </Link>
-              <Link
-                href="/login"
-                className="px-5 py-2 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-colors"
-              >
-                Entrar
-              </Link>
+              {isAuthenticated ? (
+                <>
+                  <Link
+                    href="/dashboard"
+                    className="px-4 py-2 rounded-lg border border-border text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface transition-colors"
+                  >
+                    Dashboard
+                  </Link>
+                  <button
+                    onClick={logout}
+                    className="px-5 py-2 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-colors"
+                  >
+                    Sair
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link
+                    href="/login"
+                    className="px-4 py-2 rounded-lg border border-border text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface transition-colors"
+                  >
+                    Anunciar
+                  </Link>
+                  <Link
+                    href="/login"
+                    className="px-5 py-2 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-colors"
+                  >
+                    Entrar
+                  </Link>
+                </>
+              )}
             </div>
 
             <button
@@ -105,20 +124,40 @@ export default function PublicHeader() {
                 </Link>
               ))}
               <hr className="my-3 border-border" />
-              <Link
-                href="/login"
-                onClick={() => setDrawerOpen(false)}
-                className="block px-3 py-2.5 rounded-lg text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-primary-light/50 transition-colors"
-              >
-                Anunciar
-              </Link>
-              <Link
-                href="/login"
-                onClick={() => setDrawerOpen(false)}
-                className="flex items-center justify-center px-3 py-2.5 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-colors mt-2"
-              >
-                Entrar
-              </Link>
+              {isAuthenticated ? (
+                <>
+                  <Link
+                    href="/dashboard"
+                    onClick={() => setDrawerOpen(false)}
+                    className="block px-3 py-2.5 rounded-lg text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-primary-light/50 transition-colors"
+                  >
+                    Dashboard
+                  </Link>
+                  <button
+                    onClick={() => { logout(); setDrawerOpen(false) }}
+                    className="flex items-center justify-center w-full px-3 py-2.5 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-colors mt-2"
+                  >
+                    Sair
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link
+                    href="/login"
+                    onClick={() => setDrawerOpen(false)}
+                    className="block px-3 py-2.5 rounded-lg text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-primary-light/50 transition-colors"
+                  >
+                    Anunciar
+                  </Link>
+                  <Link
+                    href="/login"
+                    onClick={() => setDrawerOpen(false)}
+                    className="flex items-center justify-center px-3 py-2.5 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-colors mt-2"
+                  >
+                    Entrar
+                  </Link>
+                </>
+              )}
             </nav>
           </aside>
         </div>

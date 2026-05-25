@@ -1,15 +1,18 @@
 'use client'
 
-import { monthlyRevenue } from '@/lib/dashboard-data'
+export interface MonthlyRevenueData {
+  month: string
+  revenue: number
+}
 
 const CHART_HEIGHT = 200
 const BAR_WIDTH = 32
 const BAR_GAP = 24
-const CHART_WIDTH = monthlyRevenue.length * (BAR_WIDTH + BAR_GAP) + 40
 
-export default function RevenueChart() {
-  const maxRevenue = Math.max(...monthlyRevenue.map((d) => d.revenue))
-  const chartData = monthlyRevenue.map((d) => ({
+export default function RevenueChart({ data, changePercent }: { data: MonthlyRevenueData[]; changePercent: number }) {
+  const CHART_WIDTH = data.length * (BAR_WIDTH + BAR_GAP) + 40
+  const maxRevenue = Math.max(...data.map((d) => d.revenue), 1)
+  const chartData = data.map((d) => ({
     ...d,
     height: (d.revenue / maxRevenue) * (CHART_HEIGHT - 40),
   }))
@@ -23,8 +26,12 @@ export default function RevenueChart() {
           <h2 className="text-sm font-semibold text-text-primary">Receita Mensal</h2>
           <p className="text-xs text-text-secondary mt-0.5">Últimos 6 meses</p>
         </div>
-        <span className="text-xs font-medium text-success bg-success/10 px-2 py-1 rounded-full">
-          +12.5%
+        <span
+          className={`text-xs font-medium px-2 py-1 rounded-full ${
+            changePercent >= 0 ? 'text-success bg-success/10' : 'text-error bg-error/10'
+          }`}
+        >
+          {changePercent >= 0 ? '+' : ''}{changePercent.toFixed(1)}%
         </span>
       </div>
 

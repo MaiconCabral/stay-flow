@@ -3,7 +3,9 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Eye, EyeOff, Loader2, Mail, Lock, User, Check } from 'lucide-react'
+import { Eye, EyeOff, Loader2, Mail, Lock, User } from 'lucide-react'
+import { register as apiRegister } from '@/lib/auth'
+import type { AxiosError } from 'axios'
 
 function GoogleIcon() {
   return (
@@ -44,7 +46,7 @@ export default function CadastroPage() {
     if (!email.trim()) errs.email = 'E-mail é obrigatório'
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email = 'E-mail inválido'
     if (!password.trim()) errs.password = 'Senha é obrigatória'
-    else if (password.length < 6) errs.password = 'Mínimo de 6 caracteres'
+    else if (password.length < 8) errs.password = 'Mínimo de 8 caracteres'
     if (!confirmPassword.trim()) errs.confirmPassword = 'Confirme a senha'
     else if (password !== confirmPassword) errs.confirmPassword = 'As senhas não conferem'
     if (!acceptTerms) errs.terms = 'Você precisa aceitar os termos'
@@ -56,8 +58,23 @@ export default function CadastroPage() {
     e.preventDefault()
     if (!validate()) return
     setLoading(true)
-    await new Promise((r) => setTimeout(r, 1500))
-    router.push('/dashboard')
+    try {
+      await apiRegister({ name, email, password, password_confirmation: confirmPassword })
+      router.push('/dashboard')
+    } catch (err: unknown) {
+      const axiosErr = err as AxiosError<{ message: string; errors?: Record<string, string[]> }>
+      const serverErrors = axiosErr.response?.data?.errors
+      if (serverErrors) {
+        const mapped: Record<string, string> = {}
+        for (const [field, msgs] of Object.entries(serverErrors)) {
+          mapped[field] = msgs[0]
+        }
+        setErrors((prev) => ({ ...prev, ...mapped }))
+      } else {
+        setErrors({ form: axiosErr.response?.data?.message ?? 'Erro ao criar conta. Tente novamente.' })
+      }
+      setLoading(false)
+    }
   }
 
   const inputClass = (field: string) =>
@@ -124,7 +141,7 @@ export default function CadastroPage() {
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => { setPassword(e.target.value); setErrors((prev) => ({ ...prev, password: '' })) }}
-                placeholder="Mínimo 6 caracteres"
+                placeholder="Mínimo 8 caracteres"
                 autoComplete="new-password"
                 disabled={loading}
                 className={`${inputClass('password')} pl-9 pr-10`}

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   User,
   Bell,
@@ -8,13 +9,15 @@ import {
   Shield,
   Save,
   Trash2,
-  Globe,
-  ChevronRight,
   Eye,
   EyeOff,
   Check,
   AlertTriangle,
+  Loader2,
 } from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
+import { updateUser, deleteUser } from '@/lib/user'
+import type { AxiosError } from 'axios'
 
 type TabKey = 'profile' | 'notifications' | 'payments' | 'account'
 
@@ -151,58 +154,92 @@ function RadioGroup({ label, value, onChange, options }: {
 }
 
 function ProfileTab() {
-  const [name, setName] = useState('Maria Admin')
-  const [email, setEmail] = useState('maria@stayflow.com')
-  const [phone, setPhone] = useState('+55 11 99999-8888')
-  const [bio, setBio] = useState('Anfitriã dedicada com 8 imóveis em todo o Brasil. Apaixonada por proporcionar experiências incríveis para meus hóspedes.')
-  const [language, setLanguage] = useState('pt')
+  const { user } = useAuth()
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
+  const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [error, setError] = useState('')
 
-  const handleSave = useCallback(() => {
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
-  }, [])
+  useEffect(() => {
+    if (user) {
+      setName(user.name)
+      setEmail(user.email)
+      setPhone(user.phone ?? '')
+    }
+  }, [user])
+
+  const initials = user?.name
+    ? user.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
+    : '??'
+
+  const canSave = name.trim() !== (user?.name ?? '')
+    || email.trim() !== (user?.email ?? '')
+    || phone.trim() !== (user?.phone ?? '')
+
+  const handleSave = useCallback(async () => {
+    if (!user) return
+    setLoading(true)
+    setError('')
+    try {
+      const updated = await updateUser(user.id, {
+        name: name.trim(),
+        email: email.trim(),
+        phone: phone.trim() || undefined,
+      })
+      localStorage.setItem('auth_user', JSON.stringify(updated))
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    } catch (err: unknown) {
+      const axiosErr = err as AxiosError<{ message: string; errors?: Record<string, string[]> }>
+      const msg = axiosErr.response?.data?.errors
+        ? Object.values(axiosErr.response.data.errors).flat()[0]
+        : axiosErr.response?.data?.message ?? 'Erro ao salvar. Tente novamente.'
+      setError(msg)
+    } finally {
+      setLoading(false)
+    }
+  }, [user, name, email, phone])
+
+  if (!user) return null
 
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center text-white text-xl font-bold flex-shrink-0">
-          MA
-        </div>
+        {user.avatar ? (
+          <img src={user.avatar} alt="" className="w-16 h-16 rounded-full object-cover flex-shrink-0" />
+        ) : (
+          <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center text-white text-xl font-bold flex-shrink-0">
+            {initials}
+          </div>
+        )}
         <div>
-          <p className="text-sm font-semibold text-text-primary">{name}</p>
-          <p className="text-xs text-text-secondary">{email}</p>
-          <button className="mt-1 text-xs font-medium text-primary hover:text-primary-dark transition-colors">
-            Alterar foto
-          </button>
+          <p className="text-sm font-semibold text-text-primary">{user.name}</p>
+          <p className="text-xs text-text-secondary">{user.email}</p>
         </div>
       </div>
+
+      {error && (
+        <div className="p-3 rounded-lg bg-error/10 border border-error/30 text-sm text-error font-medium text-center">
+          {error}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <InputField label="Nome completo" value={name} onChange={setName} />
         <InputField label="E-mail" value={email} onChange={setEmail} type="email" />
         <InputField label="Telefone" value={phone} onChange={setPhone} placeholder="+55 (11) 99999-0000" />
-        <SelectField
-          label="Idioma"
-          value={language}
-          onChange={setLanguage}
-          options={[
-            { value: 'pt', label: 'Português (Brasil)' },
-            { value: 'en', label: 'English' },
-            { value: 'es', label: 'Español' },
-          ]}
-        />
       </div>
-
-      <InputField label="Biografia" value={bio} onChange={setBio} type="textarea" />
 
       <div className="flex items-center gap-3 pt-2">
         <button
           onClick={handleSave}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors"
+          disabled={!canSave || loading}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          {saved ? <Check size={16} /> : <Save size={16} />}
-          {saved ? 'Salvo!' : 'Salvar alterações'}
+          {loading ? <Loader2 size={16} className="animate-spin" /> : saved ? <Check size={16} /> : <Save size={16} />}
+          {loading ? 'Salvando...' : saved ? 'Salvo!' : 'Salvar alterações'}
         </button>
         <button className="px-5 py-2.5 rounded-lg border border-border bg-card text-text-secondary text-sm font-medium hover:bg-surface transition-colors">
           Cancelar
@@ -365,6 +402,8 @@ function PaymentsTab() {
 }
 
 function AccountTab() {
+  const { user, logout } = useAuth()
+  const router = useRouter()
   const [currentPw, setCurrentPw] = useState('')
   const [newPw, setNewPw] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
@@ -372,59 +411,71 @@ function AccountTab() {
   const [twoFactor, setTwoFactor] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [pwError, setPwError] = useState('')
-  const [saved, setSaved] = useState(false)
+  const [pwLoading, setPwLoading] = useState(false)
+  const [pwSaved, setPwSaved] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
 
-  const handleChangePassword = useCallback(() => {
+  const handleChangePassword = useCallback(async () => {
     setPwError('')
-    if (newPw && newPw !== confirmPw) {
-      setPwError('As senhas não conferem')
-      return
+    if (!newPw) { setPwError('Nova senha é obrigatória'); return }
+    if (newPw.length < 8) { setPwError('A senha deve ter pelo menos 8 caracteres'); return }
+    if (newPw !== confirmPw) { setPwError('As senhas não conferem'); return }
+    if (!user) return
+    setPwLoading(true)
+    try {
+      await updateUser(user.id, { password: newPw })
+      setPwSaved(true)
+      setCurrentPw('')
+      setNewPw('')
+      setConfirmPw('')
+      setTimeout(() => setPwSaved(false), 2500)
+    } catch (err: unknown) {
+      const axiosErr = err as AxiosError<{ message: string }>
+      setPwError(axiosErr.response?.data?.message ?? 'Erro ao alterar senha.')
+    } finally {
+      setPwLoading(false)
     }
-    if (newPw && newPw.length < 6) {
-      setPwError('A senha deve ter pelo menos 6 caracteres')
-      return
+  }, [user, newPw, confirmPw])
+
+  const handleDeleteAccount = useCallback(async () => {
+    if (!user) return
+    setDeleteLoading(true)
+    try {
+      await deleteUser(user.id)
+      await logout()
+      router.push('/login')
+    } catch {
+      setDeleteLoading(false)
+      setConfirmDelete(false)
     }
-    setSaved(true)
-    setCurrentPw('')
-    setNewPw('')
-    setConfirmPw('')
-    setTimeout(() => setSaved(false), 2500)
-  }, [newPw, confirmPw])
+  }, [user, logout, router])
 
   return (
-    <div className="space-y-8">
-      <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-text-primary">Informações da conta</h3>
-        <div className="bg-surface rounded-lg border border-border px-4 py-3">
-          <p className="text-xs text-text-secondary">E-mail</p>
-          <p className="text-sm font-medium text-text-primary">maria@stayflow.com</p>
-        </div>
-        <div className="bg-surface rounded-lg border border-border px-4 py-3">
-          <p className="text-xs text-text-secondary">Membro desde</p>
-          <p className="text-sm font-medium text-text-primary">Janeiro de 2024</p>
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-text-primary">Alterar senha</h3>
+      <div className="space-y-8">
         <div className="space-y-4">
-          <div className="relative">
-            <InputField
-              label="Senha atual"
-              value={currentPw}
-              onChange={setCurrentPw}
-              type={showPw ? 'text' : 'password'}
-              placeholder="••••••••"
-            />
+          <h3 className="text-sm font-semibold text-text-primary">Informações da conta</h3>
+          <div className="bg-surface rounded-lg border border-border px-4 py-3">
+            <p className="text-xs text-text-secondary">E-mail</p>
+            <p className="text-sm font-medium text-text-primary">{user?.email ?? '—'}</p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="bg-surface rounded-lg border border-border px-4 py-3">
+            <p className="text-xs text-text-secondary">Membro desde</p>
+            <p className="text-sm font-medium text-text-primary">
+              {user?.created_at ? new Date(user.created_at).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) : '—'}
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <h3 className="text-sm font-semibold text-text-primary">Alterar senha</h3>
+          <div className="space-y-4">
             <div className="relative">
               <InputField
                 label="Nova senha"
                 value={newPw}
                 onChange={setNewPw}
                 type={showPw ? 'text' : 'password'}
-                placeholder="••••••••"
+                placeholder="Mínimo 8 caracteres"
                 error={pwError}
               />
             </div>
@@ -434,28 +485,27 @@ function AccountTab() {
                 value={confirmPw}
                 onChange={setConfirmPw}
                 type={showPw ? 'text' : 'password'}
-                placeholder="••••••••"
+                placeholder="Repita a senha"
               />
             </div>
+            <button
+              type="button"
+              onClick={() => setShowPw(!showPw)}
+              className="flex items-center gap-1.5 text-xs font-medium text-text-secondary hover:text-text-primary transition-colors"
+            >
+              {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
+              {showPw ? 'Ocultar senhas' : 'Mostrar senhas'}
+            </button>
           </div>
           <button
-            type="button"
-            onClick={() => setShowPw(!showPw)}
-            className="flex items-center gap-1.5 text-xs font-medium text-text-secondary hover:text-text-primary transition-colors"
+            onClick={handleChangePassword}
+            disabled={!newPw || !confirmPw || pwLoading}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
-            {showPw ? 'Ocultar senhas' : 'Mostrar senhas'}
+            {pwLoading ? <Loader2 size={16} className="animate-spin" /> : pwSaved ? <Check size={16} /> : <Save size={16} />}
+            {pwLoading ? 'Alterando...' : pwSaved ? 'Senha alterada!' : 'Alterar senha'}
           </button>
         </div>
-        <button
-          onClick={handleChangePassword}
-          disabled={!currentPw || !newPw || !confirmPw}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {saved ? <Check size={16} /> : <Save size={16} />}
-          {saved ? 'Senha alterada!' : 'Alterar senha'}
-        </button>
-      </div>
 
       <div className="space-y-4">
         <h3 className="text-sm font-semibold text-text-primary">Segurança</h3>
@@ -495,13 +545,18 @@ function AccountTab() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setConfirmDelete(false)}
-                  className="px-4 py-2 rounded-lg border border-border bg-card text-text-secondary text-sm font-medium hover:bg-surface transition-colors"
+                  disabled={deleteLoading}
+                  className="px-4 py-2 rounded-lg border border-border bg-card text-text-secondary text-sm font-medium hover:bg-surface transition-colors disabled:opacity-40"
                 >
                   Cancelar
                 </button>
-                <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-error text-white text-sm font-medium hover:bg-error/90 transition-colors">
-                  <Trash2 size={16} />
-                  Sim, excluir permanentemente
+                <button
+                  onClick={handleDeleteAccount}
+                  disabled={deleteLoading}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-error text-white text-sm font-medium hover:bg-error/90 transition-colors disabled:opacity-40"
+                >
+                  {deleteLoading ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                  {deleteLoading ? 'Excluindo...' : 'Sim, excluir permanentemente'}
                 </button>
               </div>
             </div>

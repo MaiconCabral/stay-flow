@@ -1,12 +1,21 @@
-import { LogIn, LogOut } from 'lucide-react'
-import { upcomingEvents } from '@/lib/dashboard-data'
+'use client'
 
-export default function UpcomingEvents() {
+import { LogIn, LogOut } from 'lucide-react'
+
+export interface EventData {
+  id: string | number
+  guest: string
+  property: string
+  date: string
+  type: 'checkin' | 'checkout'
+}
+
+export default function UpcomingEvents({ events }: { events: EventData[] }) {
   return (
     <div className="bg-card rounded-xl border border-border p-5">
       <h2 className="text-sm font-semibold text-text-primary mb-4">Próximos Eventos</h2>
       <div className="space-y-3">
-        {upcomingEvents.map((event) => {
+        {events.map((event) => {
           const isCheckin = event.type === 'checkin'
           const date = new Date(event.date + 'T12:00:00').toLocaleDateString('pt-BR', {
             day: '2-digit',
@@ -35,7 +44,7 @@ export default function UpcomingEvents() {
           )
         })}
       </div>
-      {upcomingEvents.length === 0 && (
+      {events.length === 0 && (
         <p className="text-sm text-text-secondary text-center py-6">
           Nenhum evento nos próximos dias
         </p>

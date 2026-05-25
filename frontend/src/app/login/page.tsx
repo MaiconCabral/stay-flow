@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Eye, EyeOff, Loader2, Mail, Lock } from 'lucide-react'
+import { login as apiLogin } from '@/lib/auth'
+import type { AxiosError } from 'axios'
 
 function GoogleIcon() {
   return (
@@ -40,11 +42,15 @@ export default function LoginPage() {
     if (!canSubmit) return
     setLoading(true)
     setError('')
-    await new Promise((r) => setTimeout(r, 1500))
-    if (email === 'admin@stayflow.com' && password === '123456') {
+    try {
+      await apiLogin(email, password)
       router.push('/dashboard')
-    } else {
-      setError('E-mail ou senha inválidos.')
+    } catch (err: unknown) {
+      const axiosErr = err as AxiosError<{ message: string; errors?: Record<string, string[]> }>
+      const msg = axiosErr.response?.data?.errors?.email?.[0]
+        ?? axiosErr.response?.data?.message
+        ?? 'E-mail ou senha inválidos.'
+      setError(msg)
       setLoading(false)
     }
   }

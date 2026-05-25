@@ -1,13 +1,41 @@
-import { MapPin, Star, Users, Bed, Bath, Eye, Pencil } from 'lucide-react'
+import { MapPin, Users, Bed, Bath, Eye, Pencil } from 'lucide-react'
 import Link from 'next/link'
-import { type Property, getPropertyColor } from '@/lib/dashboard-data'
+import type { PropertyResource } from '@/lib/property'
 
-export default function PropertyCard({ property, index }: { property: Property; index: number }) {
+const bgColors = [
+  'bg-blue-100 text-blue-700',
+  'bg-emerald-100 text-emerald-700',
+  'bg-amber-100 text-amber-700',
+  'bg-violet-100 text-violet-700',
+  'bg-rose-100 text-rose-700',
+  'bg-cyan-100 text-cyan-700',
+  'bg-orange-100 text-orange-700',
+  'bg-teal-100 text-teal-700',
+]
+
+function getColor(index: number) {
+  return bgColors[index % bgColors.length]
+}
+
+export default function PropertyCard({ property, index }: { property: PropertyResource; index: number }) {
+  const colorClass = getColor(index)
+  const initials = property.title.slice(0, 2).toUpperCase()
+
   return (
     <div className="bg-card rounded-xl border border-border overflow-hidden hover:shadow-md transition-all duration-200 group">
-      <div className={`h-36 flex items-center justify-center ${getPropertyColor(index)} relative`}>
-        <span className="text-4xl font-bold opacity-20">{property.image}</span>
-        <span className="absolute text-2xl font-bold tracking-wider">{property.image}</span>
+      <div className={`h-36 flex items-center justify-center ${colorClass} relative`}>
+        {property.cover_image?.image_url ? (
+          <img
+            src={property.cover_image.image_url}
+            alt={property.title}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <>
+            <span className="text-4xl font-bold opacity-20">{initials}</span>
+            <span className="absolute text-2xl font-bold tracking-wider">{initials}</span>
+          </>
+        )}
         <div className="absolute top-3 right-3">
           <span
             className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${
@@ -24,22 +52,18 @@ export default function PropertyCard({ property, index }: { property: Property; 
       <div className="p-4 space-y-3">
         <div>
           <div className="flex items-start justify-between gap-2">
-            <h3 className="text-sm font-semibold text-text-primary">{property.name}</h3>
-            <div className="flex items-center gap-0.5 text-xs font-medium text-amber-600 flex-shrink-0">
-              <Star size={12} />
-              {property.rating}
-            </div>
+            <h3 className="text-sm font-semibold text-text-primary">{property.title}</h3>
           </div>
           <p className="text-xs text-text-secondary flex items-center gap-1 mt-0.5">
             <MapPin size={11} />
-            {property.location}
+            {property.city}{property.state ? `, ${property.state}` : ''}
           </p>
         </div>
 
         <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-text-secondary">
           <span className="flex items-center gap-1">
             <Users size={13} />
-            {property.maxGuests} hóspedes
+            {property.max_guests} hóspedes
           </span>
           <span className="flex items-center gap-1">
             <Bed size={13} />
@@ -54,15 +78,9 @@ export default function PropertyCard({ property, index }: { property: Property; 
         <div className="flex items-center justify-between pt-2 border-t border-border">
           <div>
             <p className="text-lg font-bold text-text-primary">
-              R$ {property.pricePerNight.toLocaleString('pt-BR')}
+              R$ {property.price_per_night.toLocaleString('pt-BR')}
             </p>
             <p className="text-[11px] text-text-secondary">por noite</p>
-          </div>
-          <div className="text-right">
-            <p className="text-sm font-semibold text-text-primary">
-              R$ {(property.revenue / 1000).toFixed(1)}k
-            </p>
-            <p className="text-[11px] text-text-secondary">{property.bookings} reservas</p>
           </div>
         </div>
 

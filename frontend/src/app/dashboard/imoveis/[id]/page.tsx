@@ -1,74 +1,112 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, MapPin, Star, Users, Bed, Bath, DollarSign, CalendarCheck, TrendingUp, MessageSquare } from 'lucide-react'
-import { properties, recentBookings, upcomingEvents, statusStyles, propertyRevenue, getPropertyColor } from '@/lib/dashboard-data'
+import {
+  ArrowLeft, MapPin, Users, Bed, Bath, DollarSign, CalendarCheck,
+  TrendingUp, Star, AlertCircle, Trash2, Loader2, AlertTriangle,
+} from 'lucide-react'
+import { fetchProperty, deleteProperty, type PropertyResource } from '@/lib/property'
+import type { AxiosError } from 'axios'
 
-function RevenueChart({ propertyId }: { propertyId: string }) {
-  const data = propertyRevenue[propertyId]
-  if (!data) return null
+export default function ImovelPage() {
+  const params = useParams()
+  const router = useRouter()
+  const id = Number(params.id)
 
-  const maxRevenue = Math.max(...data.map((d) => d.revenue))
-  const CHART_HEIGHT = 200
-  const BAR_WIDTH = 32
-  const BAR_GAP = 24
-  const CHART_WIDTH = data.length * (BAR_WIDTH + BAR_GAP) + 40
+  const [property, setProperty] = useState<PropertyResource | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
 
-  const chartData = data.map((d) => ({
-    ...d,
-    height: (d.revenue / maxRevenue) * (CHART_HEIGHT - 40),
-  }))
+  useEffect(() => {
+    if (isNaN(id)) {
+      setError('ID inválido')
+      setLoading(false)
+      return
+    }
 
-  return (
-    <svg
-      width={CHART_WIDTH}
-      height={CHART_HEIGHT}
-      viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
-      role="img"
-      aria-label={`Receita mensal do imóvel`}
-      className="min-w-full"
-    >
-      {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
-        const y = 20 + (CHART_HEIGHT - 40) * (1 - ratio)
-        return (
-          <g key={ratio}>
-            <line x1={30} y1={y} x2={CHART_WIDTH - 10} y2={y} stroke="var(--color-tertiary)" strokeWidth={1} />
-            <text x={28} y={y + 4} textAnchor="end" className="text-[10px] fill-text-secondary">
-              R${(maxRevenue * ratio / 1000).toFixed(0)}k
-            </text>
-          </g>
-        )
-      })}
-      {chartData.map((d, i) => {
-        const x = 40 + i * (BAR_WIDTH + BAR_GAP)
-        const y = CHART_HEIGHT - 20 - d.height
-        return (
-          <g key={d.month}>
-            <rect x={x} y={y} width={BAR_WIDTH} height={d.height} rx={4} className="fill-primary" />
-            <text x={x + BAR_WIDTH / 2} y={CHART_HEIGHT - 6} textAnchor="middle" className="text-[10px] fill-text-secondary">
-              {d.month}
-            </text>
-            <title>{`${d.month}: R$ ${(d.revenue / 1000).toFixed(1)}k`}</title>
-          </g>
-        )
-      })}
-    </svg>
-  )
-}
+    let cancelled = false
+    setLoading(true)
+    setError(null)
 
-export default async function ImovelPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  const property = properties.find((p) => p.id === id)
+    fetchProperty(id)
+      .then((data) => {
+        if (!cancelled) setProperty(data)
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          if (err?.response?.status === 404) {
+            notFound()
+          } else {
+            setError(err?.response?.data?.message || 'Erro ao carregar imóvel')
+          }
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
 
-  if (!property) {
-    notFound()
+    return () => { cancelled = true }
+  }, [id])
+
+  const handleDelete = async () => {
+    setDeleteLoading(true)
+    try {
+      await deleteProperty(id)
+      router.push('/dashboard/imoveis')
+    } catch (err: unknown) {
+      const axiosErr = err as AxiosError<{ message: string }>
+      setError(axiosErr.response?.data?.message ?? 'Erro ao excluir imóvel')
+      setConfirmDelete(false)
+    } finally {
+      setDeleteLoading(false)
+    }
   }
 
-  const propertyIndex = properties.findIndex((p) => p.id === id)
-  const colorClass = getPropertyColor(propertyIndex)
+  if (loading) {
+    return (
+      <div className="space-y-5 animate-pulse">
+        <div className="h-4 bg-tertiary rounded w-32" />
+        <div className="rounded-xl bg-tertiary h-48" />
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="bg-card rounded-xl border border-border p-4 space-y-2">
+              <div className="w-9 h-9 rounded-lg bg-tertiary" />
+              <div className="h-6 bg-tertiary rounded w-16" />
+              <div className="h-3 bg-tertiary rounded w-20" />
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
 
-  const propertyBookings = recentBookings.filter((b) => b.propertyId === id)
-  const propertyEvents = upcomingEvents.filter((e) => e.propertyId === id)
-  const occupancy = Math.round((property.bookings * 3 / 30) * 100)
+  if (error || !property) {
+    return (
+      <div className="space-y-5">
+        <Link
+          href="/dashboard/imoveis"
+          className="inline-flex items-center gap-1.5 text-sm text-text-secondary hover:text-text-primary transition-colors"
+        >
+          <ArrowLeft size={16} />
+          Voltar para Imóveis
+        </Link>
+        <div className="flex flex-col items-center justify-center py-20 bg-card rounded-xl border border-border">
+          <div className="w-16 h-16 rounded-2xl bg-error/10 flex items-center justify-center text-error mb-4">
+            <AlertCircle size={28} />
+          </div>
+          <h3 className="text-sm font-semibold text-text-primary mb-1">Erro ao carregar</h3>
+          <p className="text-xs text-text-secondary mb-4 text-center max-w-xs">{error}</p>
+        </div>
+      </div>
+    )
+  }
+
+  const location = [property.city, property.state, property.country].filter(Boolean).join(', ')
 
   return (
     <div className="space-y-5">
@@ -81,12 +119,12 @@ export default async function ImovelPage({ params }: { params: Promise<{ id: str
       </Link>
 
       {/* Header */}
-      <div className={`rounded-xl overflow-hidden ${colorClass}`}>
+      <div className="rounded-xl overflow-hidden bg-primary-light text-primary-dark">
         <div className="p-6 sm:p-8">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-3 flex-wrap">
-                <h1 className="text-xl sm:text-2xl font-bold">{property.name}</h1>
+                <h1 className="text-xl sm:text-2xl font-bold">{property.title}</h1>
                 <span
                   className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                     property.status === 'active'
@@ -94,20 +132,18 @@ export default async function ImovelPage({ params }: { params: Promise<{ id: str
                       : 'bg-black/10 text-text-secondary'
                   }`}
                 >
-                  {property.status === 'active' ? 'Ativo' : 'Inativo'}
+                  {property.status_label}
                 </span>
               </div>
               <p className="mt-1.5 flex items-center gap-1.5 text-sm opacity-80">
                 <MapPin size={14} />
-                {property.location} · {property.type}
+                {location} · {property.property_type_label}
               </p>
-              <p className="mt-3 text-sm opacity-75 max-w-2xl leading-relaxed">
-                {property.description}
-              </p>
-            </div>
-            <div className="flex items-center gap-1 text-sm font-medium bg-white/20 px-3 py-1.5 rounded-lg flex-shrink-0">
-              <Star size={16} />
-              {property.rating}
+              {property.description && (
+                <p className="mt-3 text-sm opacity-75 max-w-2xl leading-relaxed">
+                  {property.description}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -115,26 +151,37 @@ export default async function ImovelPage({ params }: { params: Promise<{ id: str
 
       {/* Stats cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { label: 'Receita Total', value: `R$ ${(property.revenue / 1000).toFixed(1)}k`, icon: DollarSign, color: 'text-success bg-success/10' },
-          { label: 'Reservas', value: String(property.bookings), icon: CalendarCheck, color: 'text-primary bg-primary-light' },
-          { label: 'Ocupação', value: `${occupancy}%`, icon: TrendingUp, color: 'text-amber-600 bg-amber-100' },
-          { label: 'Avaliações', value: String(property.rating), icon: Star, color: 'text-amber-600 bg-amber-100' },
-        ].map((stat) => {
-          const Icon = stat.icon
-          return (
-            <div key={stat.label} className="bg-card rounded-xl border border-border p-4">
-              <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${stat.color}`}>
-                <Icon size={18} />
-              </div>
-              <p className="mt-3 text-xl font-bold text-text-primary">{stat.value}</p>
-              <p className="text-xs text-text-secondary mt-0.5">{stat.label}</p>
-            </div>
-          )
-        })}
+        <div className="bg-card rounded-xl border border-border p-4">
+          <div className="w-9 h-9 rounded-lg flex items-center justify-center text-success bg-success/10">
+            <DollarSign size={18} />
+          </div>
+          <p className="mt-3 text-xl font-bold text-text-primary">R$ 0</p>
+          <p className="text-xs text-text-secondary mt-0.5">Receita Total</p>
+        </div>
+        <div className="bg-card rounded-xl border border-border p-4">
+          <div className="w-9 h-9 rounded-lg flex items-center justify-center text-primary bg-primary-light">
+            <CalendarCheck size={18} />
+          </div>
+          <p className="mt-3 text-xl font-bold text-text-primary">0</p>
+          <p className="text-xs text-text-secondary mt-0.5">Reservas</p>
+        </div>
+        <div className="bg-card rounded-xl border border-border p-4">
+          <div className="w-9 h-9 rounded-lg flex items-center justify-center text-amber-600 bg-amber-100">
+            <TrendingUp size={18} />
+          </div>
+          <p className="mt-3 text-xl font-bold text-text-primary">0%</p>
+          <p className="text-xs text-text-secondary mt-0.5">Ocupação</p>
+        </div>
+        <div className="bg-card rounded-xl border border-border p-4">
+          <div className="w-9 h-9 rounded-lg flex items-center justify-center text-amber-600 bg-amber-100">
+            <Star size={18} />
+          </div>
+          <p className="mt-3 text-xl font-bold text-text-primary">—</p>
+          <p className="text-xs text-text-secondary mt-0.5">Avaliações</p>
+        </div>
       </div>
 
-      {/* Details + Events */}
+      {/* Details */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="bg-card rounded-xl border border-border p-5">
           <h2 className="text-sm font-semibold text-text-primary mb-4">Detalhes</h2>
@@ -142,10 +189,10 @@ export default async function ImovelPage({ params }: { params: Promise<{ id: str
             {[
               { icon: Bed, label: 'Quartos', value: `${property.bedrooms} quartos` },
               { icon: Bath, label: 'Banheiros', value: `${property.bathrooms} banheiros` },
-              { icon: Users, label: 'Capacidade', value: `Até ${property.maxGuests} hóspedes` },
-              { icon: DollarSign, label: 'Diária', value: `R$ ${property.pricePerNight.toLocaleString('pt-BR')}` },
-              { icon: MapPin, label: 'Localização', value: property.location },
-              { icon: CalendarCheck, label: 'Tipo', value: property.type },
+              { icon: Users, label: 'Capacidade', value: `Até ${property.max_guests} hóspedes` },
+              { icon: DollarSign, label: 'Diária', value: `R$ ${property.price_per_night.toLocaleString('pt-BR')}` },
+              { icon: MapPin, label: 'Localização', value: location },
+              { icon: CalendarCheck, label: 'Tipo', value: property.property_type_label },
             ].map((item) => {
               const Icon = item.icon
               return (
@@ -163,33 +210,17 @@ export default async function ImovelPage({ params }: { params: Promise<{ id: str
           </div>
         </div>
 
-        <div className="bg-card rounded-xl border border-border p-5">
+        <div className="bg-card rounded-xl border border-border p-5 lg:col-span-2">
           <h2 className="text-sm font-semibold text-text-primary mb-4">Próximos Eventos</h2>
-          {propertyEvents.length === 0 ? (
-            <p className="text-sm text-text-secondary text-center py-6">Nenhum evento nos próximos dias</p>
-          ) : (
-            <div className="space-y-2">
-              {propertyEvents.map((event) => {
-                const date = new Date(event.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
-                return (
-                  <div key={event.id} className="flex items-center gap-3 py-2.5 border-b border-border last:border-0">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${event.type === 'checkin' ? 'bg-success/10 text-success' : 'bg-primary-light text-primary'}`}>
-                      {event.type === 'checkin' ? <Users size={15} /> : <Users size={15} />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-text-primary">{event.guest}</p>
-                      <p className="text-xs text-text-secondary">{event.type === 'checkin' ? 'Check-in' : 'Check-out'}</p>
-                    </div>
-                    <span className="text-xs font-medium text-text-secondary whitespace-nowrap">{date}</span>
-                  </div>
-                )
-              })}
-            </div>
-          )}
+          <div className="flex flex-col items-center justify-center py-10 text-center">
+            <CalendarCheck size={32} className="text-text-secondary/40 mb-3" />
+            <p className="text-sm font-medium text-text-primary">Nenhum evento nos próximos dias</p>
+            <p className="text-xs text-text-secondary mt-1">As reservas aparecerão aqui automaticamente</p>
+          </div>
         </div>
       </div>
 
-      {/* Revenue chart */}
+      {/* Revenue chart placeholder */}
       <div className="bg-card rounded-xl border border-border p-5">
         <div className="flex items-center justify-between mb-5">
           <div>
@@ -197,81 +228,69 @@ export default async function ImovelPage({ params }: { params: Promise<{ id: str
             <p className="text-xs text-text-secondary mt-0.5">Últimos 6 meses</p>
           </div>
         </div>
-        <div className="overflow-x-auto scrollbar-none">
-          <RevenueChart propertyId={id} />
+        <div className="flex flex-col items-center justify-center py-10 text-center">
+          <TrendingUp size={32} className="text-text-secondary/40 mb-3" />
+          <p className="text-sm font-medium text-text-primary">Conecte-se ao Stripe</p>
+          <p className="text-xs text-text-secondary mt-1">Configure sua integração para ver relatórios de receita</p>
         </div>
       </div>
 
-      {/* Bookings */}
+      {/* Bookings placeholder */}
       <div className="bg-card rounded-xl border border-border p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-text-primary">Reservas deste Imóvel</h2>
         </div>
-        {propertyBookings.length === 0 ? (
-          <p className="text-sm text-text-secondary text-center py-6">Nenhuma reserva encontrada</p>
-        ) : (
-          <>
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left py-3 px-2 text-xs font-medium text-text-secondary uppercase tracking-wider">Hóspede</th>
-                    <th className="text-left py-3 px-2 text-xs font-medium text-text-secondary uppercase tracking-wider">Check-in</th>
-                    <th className="text-left py-3 px-2 text-xs font-medium text-text-secondary uppercase tracking-wider">Check-out</th>
-                    <th className="text-left py-3 px-2 text-xs font-medium text-text-secondary uppercase tracking-wider">Status</th>
-                    <th className="text-right py-3 px-2 text-xs font-medium text-text-secondary uppercase tracking-wider">Valor</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {propertyBookings.map((booking) => (
-                    <tr key={booking.id} className="border-b border-border last:border-0 hover:bg-surface/50 transition-colors">
-                      <td className="py-3 px-2">
-                        <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-full bg-primary-light text-primary flex items-center justify-center text-[10px] font-semibold">{booking.avatar}</div>
-                          <span className="font-medium text-text-primary">{booking.guest}</span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-2 text-text-secondary">{booking.checkIn}</td>
-                      <td className="py-3 px-2 text-text-secondary">{booking.checkOut}</td>
-                      <td className="py-3 px-2">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusStyles[booking.status]}`}>
-                          {booking.status === 'confirmed' && 'Confirmada'}
-                          {booking.status === 'pending' && 'Pendente'}
-                          {booking.status === 'cancelled' && 'Cancelada'}
-                          {booking.status === 'completed' && 'Concluída'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-2 text-right font-medium text-text-primary">R$ {booking.amount.toLocaleString('pt-BR')}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+        <div className="flex flex-col items-center justify-center py-10 text-center">
+          <CalendarCheck size={32} className="text-text-secondary/40 mb-3" />
+          <p className="text-sm font-medium text-text-primary">Nenhuma reserva ainda</p>
+          <p className="text-xs text-text-secondary mt-1">Quando houver reservas, elas aparecerão aqui</p>
+        </div>
+      </div>
 
-            <div className="md:hidden space-y-3">
-              {propertyBookings.map((booking) => (
-                <div key={booking.id} className="flex items-start gap-3 p-3 rounded-lg border border-border">
-                  <div className="w-8 h-8 rounded-full bg-primary-light text-primary flex items-center justify-center text-xs font-semibold flex-shrink-0">{booking.avatar}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm font-medium text-text-primary">{booking.guest}</p>
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap ${statusStyles[booking.status]}`}>
-                        {booking.status === 'confirmed' && 'Confirmada'}
-                        {booking.status === 'pending' && 'Pendente'}
-                        {booking.status === 'cancelled' && 'Cancelada'}
-                        {booking.status === 'completed' && 'Concluída'}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3 mt-1.5 text-xs text-text-secondary">
-                      <span>{booking.checkIn} → {booking.checkOut}</span>
-                      <span className="font-medium text-text-primary">R$ {booking.amount.toLocaleString('pt-BR')}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
+      {/* Danger zone */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold text-text-primary">Zona de perigo</h3>
+        <div className="rounded-xl border border-error/30 bg-error/5 p-5 space-y-3">
+          <div className="flex items-start gap-3">
+            <AlertTriangle size={18} className="text-error flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-text-primary">Excluir imóvel</p>
+              <p className="text-xs text-text-secondary mt-0.5">
+                Esta ação é irreversível. Todas as informações deste imóvel serão removidas permanentemente.
+              </p>
             </div>
-          </>
-        )}
+          </div>
+          {!confirmDelete ? (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-error text-white text-sm font-medium hover:bg-error/90 transition-colors"
+            >
+              <Trash2 size={16} />
+              Excluir imóvel
+            </button>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-xs font-medium text-error">Tem certeza? Esta ação não pode ser desfeita.</p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  disabled={deleteLoading}
+                  className="px-4 py-2 rounded-lg border border-border bg-card text-text-secondary text-sm font-medium hover:bg-surface transition-colors disabled:opacity-40"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={deleteLoading}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-error text-white text-sm font-medium hover:bg-error/90 transition-colors disabled:opacity-40"
+                >
+                  {deleteLoading ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                  {deleteLoading ? 'Excluindo...' : 'Sim, excluir permanentemente'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

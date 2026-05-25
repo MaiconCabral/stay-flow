@@ -1,16 +1,16 @@
 'use client'
 
-import { useEffect, useCallback } from 'react'
-import { X, Home, Calendar, Moon, DollarSign, Eye, Pencil } from 'lucide-react'
+import { useEffect, useCallback, useState } from 'react'
+import { X, Home, Calendar, Moon, DollarSign, Eye, Pencil, AlertTriangle, Loader2, Ban } from 'lucide-react'
 import Link from 'next/link'
-import { type Booking, statusStyles, parseCheckIn, parseCheckOut } from '@/lib/dashboard-data'
+import { cancelReservation, type ReservationResource } from '@/lib/reservation'
+import type { AxiosError } from 'axios'
 
-function calcNights(checkIn: string, checkOut: string): number {
-  const [d1, m1] = checkIn.split('/').map(Number)
-  const [d2, m2] = checkOut.split('/').map(Number)
-  const start = new Date(2026, m1 - 1, d1)
-  const end = new Date(2026, m2 - 1, d2)
-  return Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+const statusStyles: Record<string, string> = {
+  confirmed: 'bg-success/10 text-success',
+  pending: 'bg-warning/10 text-warning',
+  cancelled: 'bg-error/10 text-error',
+  completed: 'bg-primary-light text-primary-dark',
 }
 
 const statusLabel: Record<string, string> = {
@@ -20,13 +20,32 @@ const statusLabel: Record<string, string> = {
   completed: 'Concluída',
 }
 
+function formatDate(iso: string): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+function calcNights(checkIn: string, checkOut: string): number {
+  if (!checkIn || !checkOut) return 0
+  const start = new Date(checkIn)
+  const end = new Date(checkOut)
+  return Math.max(0, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)))
+}
+
 export default function BookingModal({
-  booking,
+  reservation,
   onClose,
 }: {
-  booking: Booking
+  reservation: ReservationResource
   onClose: () => void
 }) {
+  const [confirmCancel, setConfirmCancel] = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
+  const [cancelling, setCancelling] = useState(false)
+  const [cancelError, setCancelError] = useState('')
+  const [cancelled, setCancelled] = useState(false)
+
   const handleKey = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
@@ -43,7 +62,28 @@ export default function BookingModal({
     }
   }, [handleKey])
 
-  const nights = calcNights(booking.checkIn, booking.checkOut)
+  const nights = calcNights(reservation.check_in, reservation.check_out)
+
+  const handleCancel = useCallback(async () => {
+    if (!cancelReason.trim()) return
+    setCancelling(true)
+    setCancelError('')
+    try {
+      await cancelReservation(reservation.id, cancelReason.trim())
+      setCancelled(true)
+      setConfirmCancel(false)
+    } catch (err: unknown) {
+      const axiosErr = err as AxiosError<{ message: string }>
+      setCancelError(axiosErr.response?.data?.message ?? 'Erro ao cancelar reserva')
+    } finally {
+      setCancelling(false)
+    }
+  }, [reservation.id, cancelReason])
+
+  const isCancelable = reservation.status === 'pending' || reservation.status === 'confirmed'
+  const initials = reservation.guest?.name
+    ? reservation.guest.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
+    : '??'
 
   return (
     <div
@@ -62,11 +102,11 @@ export default function BookingModal({
         <div className="flex items-center justify-between p-5 border-b border-border">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-primary-light text-primary flex items-center justify-center text-sm font-semibold">
-              {booking.avatar}
+              {initials}
             </div>
             <div>
-              <h2 className="text-sm font-semibold text-text-primary">{booking.guest}</h2>
-              <p className="text-xs text-text-secondary">{booking.id}</p>
+              <h2 className="text-sm font-semibold text-text-primary">{reservation.guest?.name ?? 'Hóspede'}</h2>
+              <p className="text-xs text-text-secondary">#{reservation.id}</p>
             </div>
           </div>
           <button
@@ -79,70 +119,137 @@ export default function BookingModal({
         </div>
 
         {/* Content */}
-        <div className="p-5 space-y-4">
-          <div className="flex items-center gap-3 p-3 rounded-lg bg-surface">
-            <Home size={18} className="text-primary flex-shrink-0" />
-            <span className="text-sm font-medium text-text-primary">{booking.property}</span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex items-center gap-2.5 p-3 rounded-lg border border-border">
-              <Calendar size={16} className="text-text-secondary flex-shrink-0" />
-              <div>
-                <p className="text-xs text-text-secondary">Check-in</p>
-                <p className="text-sm font-medium text-text-primary">{booking.checkIn}</p>
+        {cancelled ? (
+          <div className="p-5 space-y-4">
+            <div className="flex flex-col items-center justify-center py-6 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-error/10 flex items-center justify-center text-error mb-3">
+                <Ban size={28} />
               </div>
+              <h3 className="text-sm font-semibold text-text-primary mb-1">Reserva cancelada</h3>
+              <p className="text-xs text-text-secondary">A reserva foi cancelada com sucesso.</p>
             </div>
-            <div className="flex items-center gap-2.5 p-3 rounded-lg border border-border">
-              <Calendar size={16} className="text-text-secondary flex-shrink-0" />
-              <div>
-                <p className="text-xs text-text-secondary">Check-out</p>
-                <p className="text-sm font-medium text-text-primary">{booking.checkOut}</p>
+          </div>
+        ) : (
+          <>
+            <div className="p-5 space-y-4">
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-surface">
+                <Home size={18} className="text-primary flex-shrink-0" />
+                <span className="text-sm font-medium text-text-primary">{reservation.property?.title ?? 'Imóvel'}</span>
               </div>
+
+              <div className="flex items-center gap-2.5 p-3 rounded-lg border border-border">
+                <Calendar size={16} className="text-text-secondary flex-shrink-0" />
+                <div className="flex-1 flex justify-between">
+                  <div>
+                    <p className="text-xs text-text-secondary">Check-in</p>
+                    <p className="text-sm font-medium text-text-primary">{formatDate(reservation.check_in)}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-text-secondary">Check-out</p>
+                    <p className="text-sm font-medium text-text-primary">{formatDate(reservation.check_out)}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-3 rounded-lg border border-border">
+                <div className="flex items-center gap-2.5">
+                  <Moon size={16} className="text-text-secondary flex-shrink-0" />
+                  <span className="text-sm text-text-secondary">Total de noites</span>
+                </div>
+                <span className="text-sm font-semibold text-text-primary">{nights} noites</span>
+              </div>
+
+              <div className="space-y-2 p-3 rounded-lg border border-border">
+                <div className="flex justify-between text-sm text-text-secondary">
+                  <span>Subtotal</span>
+                  <span>R$ {Number(reservation.subtotal).toLocaleString('pt-BR')}</span>
+                </div>
+                <div className="flex justify-between text-sm text-text-secondary">
+                  <span>Taxa de limpeza</span>
+                  <span>R$ {Number(reservation.cleaning_fee).toLocaleString('pt-BR')}</span>
+                </div>
+                <div className="flex justify-between text-sm text-text-secondary">
+                  <span>Taxa de serviço</span>
+                  <span>R$ {Number(reservation.service_fee).toLocaleString('pt-BR')}</span>
+                </div>
+                <div className="flex justify-between text-sm font-bold text-text-primary pt-2 border-t border-border">
+                  <span>Total</span>
+                  <span>R$ {Number(reservation.total_price).toLocaleString('pt-BR')}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-3 rounded-lg border border-border">
+                <span className="text-sm text-text-secondary">Status</span>
+                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${statusStyles[reservation.status] ?? ''}`}>
+                  {statusLabel[reservation.status] ?? reservation.status_label}
+                </span>
+              </div>
+
+              {reservation.notes && (
+                <div className="p-3 rounded-lg border border-border">
+                  <p className="text-xs text-text-secondary mb-1">Observações</p>
+                  <p className="text-sm text-text-primary">{reservation.notes}</p>
+                </div>
+              )}
+
+              {/* Cancel section */}
+              {isCancelable && (
+                <div className="space-y-3">
+                  {!confirmCancel ? (
+                    <button
+                      onClick={() => setConfirmCancel(true)}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-error/50 text-error text-sm font-medium hover:bg-error/5 transition-colors"
+                    >
+                      <Ban size={16} />
+                      Cancelar reserva
+                    </button>
+                  ) : (
+                    <div className="space-y-3 p-3 rounded-lg border border-error/30 bg-error/5">
+                      <p className="text-xs font-medium text-error">Tem certeza? Informe o motivo do cancelamento:</p>
+                      <textarea
+                        value={cancelReason}
+                        onChange={(e) => setCancelReason(e.target.value)}
+                        placeholder="Descreva o motivo..."
+                        rows={2}
+                        className="w-full px-3 py-2 rounded-lg bg-surface border border-border text-sm text-text-primary placeholder:text-text-secondary outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors resize-none"
+                      />
+                      {cancelError && <p className="text-xs text-error">{cancelError}</p>}
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => { setConfirmCancel(false); setCancelReason(''); setCancelError('') }}
+                          disabled={cancelling}
+                          className="flex-1 py-2 rounded-lg border border-border bg-card text-text-secondary text-sm font-medium hover:bg-surface transition-colors disabled:opacity-40"
+                        >
+                          Voltar
+                        </button>
+                        <button
+                          onClick={handleCancel}
+                          disabled={cancelling || !cancelReason.trim()}
+                          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-error text-white text-sm font-medium hover:bg-error/90 transition-colors disabled:opacity-40"
+                        >
+                          {cancelling ? <Loader2 size={16} className="animate-spin" /> : <Ban size={16} />}
+                          {cancelling ? 'Cancelando...' : 'Confirmar cancelamento'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-          </div>
 
-          <div className="flex items-center justify-between p-3 rounded-lg border border-border">
-            <div className="flex items-center gap-2.5">
-              <Moon size={16} className="text-text-secondary flex-shrink-0" />
-              <span className="text-sm text-text-secondary">Total de noites</span>
+            {/* Actions */}
+            <div className="flex gap-2.5 p-5 pt-0">
+              <Link
+                href={`/dashboard/imoveis/${reservation.property_id}`}
+                onClick={onClose}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:opacity-90 transition-opacity"
+              >
+                <Eye size={16} />
+                Ver Imóvel
+              </Link>
             </div>
-            <span className="text-sm font-semibold text-text-primary">{nights} noites</span>
-          </div>
-
-          <div className="flex items-center justify-between p-3 rounded-lg border border-border">
-            <div className="flex items-center gap-2.5">
-              <DollarSign size={16} className="text-success flex-shrink-0" />
-              <span className="text-sm text-text-secondary">Valor total</span>
-            </div>
-            <span className="text-base font-bold text-text-primary">
-              R$ {booking.amount.toLocaleString('pt-BR')}
-            </span>
-          </div>
-
-          <div className="flex items-center justify-between p-3 rounded-lg border border-border">
-            <span className="text-sm text-text-secondary">Status</span>
-            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${statusStyles[booking.status]}`}>
-              {statusLabel[booking.status]}
-            </span>
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex gap-2.5 p-5 pt-0">
-          <Link
-            href={`/dashboard/imoveis/${booking.propertyId}`}
-            onClick={onClose}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:opacity-90 transition-opacity"
-          >
-            <Eye size={16} />
-            Ver Imóvel
-          </Link>
-          <button className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-medium border border-border text-text-secondary hover:bg-surface hover:text-text-primary transition-colors">
-            <Pencil size={16} />
-            Editar
-          </button>
-        </div>
+          </>
+        )}
       </div>
     </div>
   )
