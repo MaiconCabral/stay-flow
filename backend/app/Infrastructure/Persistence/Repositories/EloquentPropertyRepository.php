@@ -10,7 +10,7 @@ class EloquentPropertyRepository implements PropertyRepositoryInterface
 {
     public function findById(int $id): ?Property
     {
-        return Property::find($id);
+        return Property::with(['images', 'coverImage', 'host'])->find($id);
     }
 
     public function findBySlug(string $slug): ?Property

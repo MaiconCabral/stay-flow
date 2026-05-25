@@ -6,11 +6,16 @@ import Link from 'next/link'
 import {
   MapPin, Star, Users, Bed, Bath, ChevronRight,
   Minus, Plus, CalendarDays, Check, MessageCircle, Share2, Heart,
-  AlertCircle,
+  AlertCircle, Loader2, XCircle,
 } from 'lucide-react'
 import PublicHeader from '@/app/_components/public-header'
 import PublicFooter from '@/app/_components/public-footer'
 import { fetchProperty, fetchProperties, type PropertyResource } from '@/lib/property'
+import { createReservation } from '@/lib/reservation'
+import { checkAvailability, type CheckAvailabilityResult } from '@/lib/availability'
+import { fetchPropertyReviews, type ReviewResource } from '@/lib/review'
+import { useAuth } from '@/contexts/AuthContext'
+import { useRouter } from 'next/navigation'
 import { notFound } from 'next/navigation'
 
 const bgColors = [
@@ -55,9 +60,13 @@ function PriceInput({ label, value, onChange }: {
 
 export default function ImovelPage() {
   const params = useParams()
+  const router = useRouter()
   const id = Number(params.id)
+  const { isAuthenticated } = useAuth()
 
   const [property, setProperty] = useState<PropertyResource | null>(null)
+  const [reviews, setReviews] = useState<ReviewResource[]>([])
+  const [averageRating, setAverageRating] = useState(0)
   const [related, setRelated] = useState<PropertyResource[]>([])
   const [loading, setLoading] = useState(true)
   const [notFoundState, setNotFoundState] = useState(false)
@@ -65,6 +74,12 @@ export default function ImovelPage() {
   const [checkIn, setCheckIn] = useState('')
   const [checkOut, setCheckOut] = useState('')
   const [guests, setGuests] = useState(1)
+
+  const [availability, setAvailability] = useState<CheckAvailabilityResult | null>(null)
+  const [isCheckingAvailability, setIsCheckingAvailability] = useState(false)
+  const [bookingLoading, setBookingLoading] = useState(false)
+  const [bookingError, setBookingError] = useState<string | null>(null)
+  const [bookingSuccess, setBookingSuccess] = useState(false)
 
   useEffect(() => {
     if (isNaN(id)) {
@@ -79,11 +94,14 @@ export default function ImovelPage() {
     Promise.all([
       fetchProperty(id),
       fetchProperties({ status: 'active', per_page: 4 }),
+      fetchPropertyReviews(id),
     ])
-      .then(([prop, list]) => {
+      .then(([prop, list, rev]) => {
         if (!cancelled) {
           setProperty(prop)
           setRelated(list.data.filter((p) => p.id !== id).slice(0, 3))
+          setReviews(rev.data)
+          setAverageRating(rev.meta.average_rating)
         }
       })
       .catch((err) => {
@@ -109,6 +127,52 @@ export default function ImovelPage() {
     const diff = Math.max(0, Math.ceil((end.getTime() - start.getTime()) / 86400000))
     return diff
   }, [checkIn, checkOut])
+
+  useEffect(() => {
+    if (!checkIn || !checkOut || nights === 0 || !property) {
+      setAvailability(null)
+      return
+    }
+    let cancelled = false
+    setIsCheckingAvailability(true)
+    checkAvailability(property.id, checkIn, checkOut)
+      .then((result) => {
+        if (!cancelled) setAvailability(result)
+      })
+      .catch(() => {
+        if (!cancelled) setAvailability(null)
+      })
+      .finally(() => {
+        if (!cancelled) setIsCheckingAvailability(false)
+      })
+    return () => { cancelled = true }
+  }, [checkIn, checkOut, nights, property])
+
+  const handleBooking = async () => {
+    if (!isAuthenticated) {
+      router.push(`/login?redirect=/imoveis/${id}`)
+      return
+    }
+    if (!property || !checkIn || !checkOut) return
+
+    setBookingLoading(true)
+    setBookingError(null)
+
+    try {
+      await createReservation({
+        property_id: property.id,
+        check_in: checkIn,
+        check_out: checkOut,
+        total_guests: guests,
+      })
+      setBookingSuccess(true)
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } }
+      setBookingError(axiosErr.response?.data?.message ?? 'Erro ao realizar reserva. Tente novamente.')
+    } finally {
+      setBookingLoading(false)
+    }
+  }
 
   if (notFoundState) {
     notFound()
@@ -287,79 +351,182 @@ export default function ImovelPage() {
                   <p className="text-sm text-text-secondary leading-relaxed">{property.description}</p>
                 </div>
               )}
+
+              {/* Reviews */}
+              {reviews.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <h2 className="text-base font-semibold text-text-primary">Avaliações</h2>
+                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 text-xs font-medium">
+                      <Star size={13} fill="currentColor" />
+                      {averageRating.toFixed(1)}
+                    </div>
+                    <span className="text-xs text-text-secondary">({reviews.length} {reviews.length === 1 ? 'avaliação' : 'avaliações'})</span>
+                  </div>
+                  <div className="space-y-4">
+                    {reviews.map((review) => (
+                      <div key={review.id} className="p-4 rounded-xl border border-border bg-card">
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="w-8 h-8 rounded-full bg-primary-light text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">
+                            {review.guest?.name?.slice(0, 2).toUpperCase() || '??'}
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-text-primary">{review.guest?.name || 'Anônimo'}</p>
+                            <p className="text-[11px] text-text-secondary">
+                              {new Date(review.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            </p>
+                          </div>
+                          <div className="ml-auto flex items-center gap-0.5">
+                            {[1, 2, 3, 4, 5].map((s) => (
+                              <Star
+                                key={s}
+                                size={13}
+                                className={s <= review.rating ? 'text-amber-400' : 'text-text-secondary/20'}
+                                fill={s <= review.rating ? 'currentColor' : 'none'}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                        <p className="text-sm text-text-secondary leading-relaxed">{review.comment}</p>
+                        {review.host_reply && (
+                          <div className="mt-3 pl-3 border-l-2 border-primary/30">
+                            <p className="text-xs font-medium text-text-primary mb-0.5">Resposta do anfitrião</p>
+                            <p className="text-xs text-text-secondary">{review.host_reply}</p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Right Column - Reservation Sidebar */}
             <div className="w-full lg:w-[400px] lg:flex-shrink-0">
               <div className="lg:sticky lg:top-24 space-y-4">
-                <div className="bg-card rounded-xl border border-border p-5 sm:p-6 shadow-sm">
-                  <div className="flex items-baseline justify-between mb-5">
-                    <div>
-                      <span className="text-xl font-bold text-text-primary">
-                        R$ {property.price_per_night.toLocaleString('pt-BR')}
-                      </span>
-                      <span className="text-sm text-text-secondary"> / noite</span>
+                {bookingSuccess ? (
+                  <div className="bg-card rounded-xl border border-border p-5 sm:p-6 shadow-sm">
+                    <div className="flex flex-col items-center text-center py-4">
+                      <div className="w-14 h-14 rounded-2xl bg-success/10 flex items-center justify-center text-success mb-4">
+                        <Check size={28} />
+                      </div>
+                      <h3 className="text-base font-semibold text-text-primary mb-1">Reserva confirmada!</h3>
+                      <p className="text-sm text-text-secondary mb-4">
+                        Sua reserva foi realizada com sucesso. Você pode acompanhá-la no seu painel.
+                      </p>
+                      <button
+                        onClick={() => router.push('/dashboard/reservas?view=guest')}
+                        className="w-full py-3 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-colors"
+                      >
+                        Ver minhas reservas
+                      </button>
                     </div>
                   </div>
-
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-2">
-                      <PriceInput label="Check-in" value={checkIn} onChange={setCheckIn} />
-                      <PriceInput label="Check-out" value={checkOut} onChange={setCheckOut} />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium text-text-secondary mb-1.5">Hóspedes</label>
-                      <div className="flex items-center justify-between rounded-lg border border-border bg-surface px-3 py-2.5">
-                        <button
-                          onClick={() => setGuests(Math.max(1, guests - 1))}
-                          disabled={guests <= 1}
-                          className="w-7 h-7 rounded-md border border-border flex items-center justify-center text-text-secondary hover:bg-card disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                        >
-                          <Minus size={14} />
-                        </button>
-                        <span className="text-sm font-medium text-text-primary">{guests} {guests === 1 ? 'hóspede' : 'hóspedes'}</span>
-                        <button
-                          onClick={() => setGuests(Math.min(property.max_guests, guests + 1))}
-                          disabled={guests >= property.max_guests}
-                          className="w-7 h-7 rounded-md border border-border flex items-center justify-center text-text-secondary hover:bg-card disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                        >
-                          <Plus size={14} />
-                        </button>
+                ) : (
+                  <div className="bg-card rounded-xl border border-border p-5 sm:p-6 shadow-sm">
+                    <div className="flex items-baseline justify-between mb-5">
+                      <div>
+                        <span className="text-xl font-bold text-text-primary">
+                          R$ {property.price_per_night.toLocaleString('pt-BR')}
+                        </span>
+                        <span className="text-sm text-text-secondary"> / noite</span>
                       </div>
                     </div>
 
-                    <button
-                      disabled={!checkIn || !checkOut || nights === 0}
-                      className="w-full py-3 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      Reservar
-                    </button>
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-2">
+                        <PriceInput label="Check-in" value={checkIn} onChange={setCheckIn} />
+                        <PriceInput label="Check-out" value={checkOut} onChange={setCheckOut} />
+                      </div>
 
-                    <p className="text-center text-[11px] text-text-secondary">Você só será cobrado após a confirmação</p>
+                      <div>
+                        <label className="block text-xs font-medium text-text-secondary mb-1.5">Hóspedes</label>
+                        <div className="flex items-center justify-between rounded-lg border border-border bg-surface px-3 py-2.5">
+                          <button
+                            onClick={() => setGuests(Math.max(1, guests - 1))}
+                            disabled={guests <= 1}
+                            className="w-7 h-7 rounded-md border border-border flex items-center justify-center text-text-secondary hover:bg-card disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          >
+                            <Minus size={14} />
+                          </button>
+                          <span className="text-sm font-medium text-text-primary">{guests} {guests === 1 ? 'hóspede' : 'hóspedes'}</span>
+                          <button
+                            onClick={() => setGuests(Math.min(property.max_guests, guests + 1))}
+                            disabled={guests >= property.max_guests}
+                            className="w-7 h-7 rounded-md border border-border flex items-center justify-center text-text-secondary hover:bg-card disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          >
+                            <Plus size={14} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {bookingError && (
+                        <div className="flex items-start gap-2 p-3 rounded-lg bg-error/5 border border-error/20">
+                          <XCircle size={16} className="text-error flex-shrink-0 mt-0.5" />
+                          <p className="text-xs text-error">{bookingError}</p>
+                        </div>
+                      )}
+
+                      {availability && !isCheckingAvailability && !availability.is_available && (
+                        <div className="flex items-start gap-2 p-3 rounded-lg bg-warning/5 border border-warning/20">
+                          <AlertCircle size={16} className="text-warning flex-shrink-0 mt-0.5" />
+                          <p className="text-xs text-warning">
+                            Este imóvel não está disponível para as datas selecionadas.
+                          </p>
+                        </div>
+                      )}
+
+                      {isCheckingAvailability && checkIn && checkOut && (
+                        <div className="flex items-center justify-center gap-2 text-xs text-text-secondary">
+                          <Loader2 size={14} className="animate-spin" />
+                          Verificando disponibilidade...
+                        </div>
+                      )}
+
+                      <button
+                        onClick={handleBooking}
+                        disabled={
+                          !checkIn || !checkOut || nights === 0 ||
+                          bookingLoading || isCheckingAvailability ||
+                          (availability !== null && !availability.is_available)
+                        }
+                        className="w-full py-3 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                      >
+                        {bookingLoading ? (
+                          <>
+                            <Loader2 size={16} className="animate-spin" />
+                            Reservando...
+                          </>
+                        ) : (
+                          'Reservar'
+                        )}
+                      </button>
+
+                      <p className="text-center text-[11px] text-text-secondary">Você só será cobrado após a confirmação</p>
+                    </div>
+
+                    {nights > 0 && (
+                      <div className="mt-5 pt-4 border-t border-border space-y-2.5">
+                        <div className="flex justify-between text-sm text-text-secondary">
+                          <span>R$ {property.price_per_night.toLocaleString('pt-BR')} × {nights} {nights === 1 ? 'noite' : 'noites'}</span>
+                          <span>R$ {subtotal.toLocaleString('pt-BR')}</span>
+                        </div>
+                        <div className="flex justify-between text-sm text-text-secondary">
+                          <span>Taxa de limpeza</span>
+                          <span>R$ {cleaningFee.toLocaleString('pt-BR')}</span>
+                        </div>
+                        <div className="flex justify-between text-sm text-text-secondary">
+                          <span>Taxa de serviço</span>
+                          <span>R$ {serviceFee.toLocaleString('pt-BR')}</span>
+                        </div>
+                        <div className="flex justify-between text-sm font-bold text-text-primary pt-2.5 border-t border-border">
+                          <span>Total</span>
+                          <span>R$ {total.toLocaleString('pt-BR')}</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
-
-                  {nights > 0 && (
-                    <div className="mt-5 pt-4 border-t border-border space-y-2.5">
-                      <div className="flex justify-between text-sm text-text-secondary">
-                        <span>R$ {property.price_per_night.toLocaleString('pt-BR')} × {nights} {nights === 1 ? 'noite' : 'noites'}</span>
-                        <span>R$ {subtotal.toLocaleString('pt-BR')}</span>
-                      </div>
-                      <div className="flex justify-between text-sm text-text-secondary">
-                        <span>Taxa de limpeza</span>
-                        <span>R$ {cleaningFee.toLocaleString('pt-BR')}</span>
-                      </div>
-                      <div className="flex justify-between text-sm text-text-secondary">
-                        <span>Taxa de serviço</span>
-                        <span>R$ {serviceFee.toLocaleString('pt-BR')}</span>
-                      </div>
-                      <div className="flex justify-between text-sm font-bold text-text-primary pt-2.5 border-t border-border">
-                        <span>Total</span>
-                        <span>R$ {total.toLocaleString('pt-BR')}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                )}
 
                 <div className="bg-card rounded-xl border border-border p-5">
                   <h3 className="text-sm font-semibold text-text-primary mb-3">Por que reservar no StayFlow?</h3>

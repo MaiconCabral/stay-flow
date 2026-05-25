@@ -123,3 +123,26 @@ export async function updateProperty(id: number, data: Partial<StorePropertyData
 export async function deleteProperty(id: number): Promise<void> {
   await api.delete(`/properties/${id}`)
 }
+
+export interface UploadedImage {
+  id: number
+  image_url: string
+  is_cover: boolean
+  order: number
+}
+
+export async function uploadPropertyImage(propertyId: number, file: File, isCover?: boolean): Promise<UploadedImage> {
+  const formData = new FormData()
+  formData.append('image', file)
+  if (isCover) formData.append('is_cover', '1')
+  const { data } = await api.post<UploadedImage>(`/properties/${propertyId}/images`, formData)
+  return data
+}
+
+export async function deletePropertyImage(propertyId: number, imageId: number): Promise<void> {
+  await api.delete(`/properties/${propertyId}/images/${imageId}`)
+}
+
+export async function setPropertyImageCover(propertyId: number, imageId: number): Promise<void> {
+  await api.put(`/properties/${propertyId}/images/${imageId}/cover`)
+}
