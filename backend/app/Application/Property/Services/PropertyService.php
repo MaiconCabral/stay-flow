@@ -46,4 +46,9 @@ class PropertyService
     {
         $this->managePropertyUseCase->delete($id);
     }
+
+    public function locations(?string $search = null): array
+    {
+        return $this->managePropertyUseCase->getLocations($search);
+    }
 }

@@ -101,6 +101,10 @@ class EloquentReservationRepository implements ReservationRepositoryInterface
             $query->where('property_id', $filters['property_id']);
         }
 
+        if (! empty($filters['property_ids'])) {
+            $query->whereIn('property_id', $filters['property_ids']);
+        }
+
         if (! empty($filters['guest_id'])) {
             $query->where('guest_id', $filters['guest_id']);
         }

@@ -55,6 +55,26 @@ class EloquentPropertyRepository implements PropertyRepositoryInterface
         return $query->paginate($perPage);
     }
 
+    public function getDistinctLocations(?string $search = null): array
+    {
+        $query = Property::query()
+            ->selectRaw('city, state, COUNT(*) as property_count')
+            ->whereNotNull('city')
+            ->where('city', '!=', '')
+            ->groupBy('city', 'state')
+            ->orderByDesc('property_count')
+            ->orderBy('city');
+
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('city', 'like', "%{$search}%")
+                  ->orWhere('state', 'like', "%{$search}%");
+            });
+        }
+
+        return $query->get()->toArray();
+    }
+
     private function applyFilters($query, array $filters): void
     {
         if (! empty($filters['search'])) {
@@ -97,6 +117,23 @@ class EloquentPropertyRepository implements PropertyRepositoryInterface
 
         if (! empty($filters['bedrooms'])) {
             $query->where('bedrooms', $filters['bedrooms']);
+        }
+
+        if (! empty($filters['check_in']) && ! empty($filters['check_out'])) {
+            $checkIn = $filters['check_in'];
+            $checkOut = $filters['check_out'];
+
+            $query->whereDoesntHave('reservations', function ($q) use ($checkIn, $checkOut) {
+                $q->where('status', '!=', 'cancelled')
+                  ->where('check_in', '<', $checkOut)
+                  ->where('check_out', '>', $checkIn);
+            });
+
+            $query->whereDoesntHave('availabilityBlocks', function ($q) use ($checkIn, $checkOut) {
+                $q->where('is_available', false)
+                  ->where('start_date', '<', $checkOut)
+                  ->where('end_date', '>', $checkIn);
+            });
         }
     }
 }

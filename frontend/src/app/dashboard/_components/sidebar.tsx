@@ -10,21 +10,44 @@ import {
   DollarSign,
   Settings,
   LogOut,
+  MapPin,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 
-const navItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/dashboard/imoveis', label: 'Imóveis', icon: Building2 },
-  { href: '/dashboard/reservas', label: 'Reservas', icon: CalendarCheck },
-  { href: '/dashboard/mensagens', label: 'Mensagens', icon: MessageSquare },
-  { href: '/dashboard/ganhos', label: 'Ganhos', icon: DollarSign },
-  { href: '/dashboard/configuracoes', label: 'Configurações', icon: Settings },
-]
+function getNavItems(isHost: boolean) {
+  const common = [
+    { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  ]
+
+  if (isHost) {
+    common.push(
+      { href: '/dashboard/imoveis', label: 'Imóveis', icon: Building2 },
+    )
+  }
+
+  common.push(
+    { href: '/dashboard/reservas', label: isHost ? 'Reservas' : 'Minhas Viagens', icon: CalendarCheck },
+    { href: '/dashboard/mensagens', label: 'Mensagens', icon: MessageSquare },
+  )
+
+  if (isHost) {
+    common.push(
+      { href: '/dashboard/ganhos', label: 'Ganhos', icon: DollarSign },
+    )
+  }
+
+  common.push(
+    { href: '/dashboard/configuracoes', label: 'Configurações', icon: Settings },
+  )
+
+  return common
+}
 
 export default function Sidebar() {
   const pathname = usePathname()
-  const { logout } = useAuth()
+  const { user, logout } = useAuth()
+  const isHost = user?.is_host ?? false
+  const navItems = getNavItems(isHost)
 
   return (
     <aside className="hidden lg:flex flex-col w-60 h-screen bg-card border-r border-border fixed left-0 top-0 z-30">

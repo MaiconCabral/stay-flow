@@ -21,7 +21,7 @@ class PropertyController
         $filters = $request->only([
             'search', 'city', 'state', 'property_type', 'status',
             'price_min', 'price_max', 'max_guests', 'bedrooms',
-            'sort_field', 'sort_direction',
+            'sort_field', 'sort_direction', 'check_in', 'check_out',
         ]);
         $perPage = $request->input('per_page', 15);
 
@@ -68,5 +68,15 @@ class PropertyController
         $this->propertyService->delete($id);
 
         return response()->json(null, 204);
+    }
+
+    public function locations(Request $request): JsonResponse
+    {
+        $search = $request->input('q');
+        $locations = $this->propertyService->locations($search);
+
+        return response()->json([
+            'data' => $locations,
+        ]);
     }
 }

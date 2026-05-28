@@ -1,10 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Eye, EyeOff, Loader2, Mail, Lock } from 'lucide-react'
-import { login as apiLogin } from '@/lib/auth'
+import { useAuth } from '@/contexts/AuthContext'
 import type { AxiosError } from 'axios'
 
 function GoogleIcon() {
@@ -27,7 +26,7 @@ function AppleIcon() {
 }
 
 export default function LoginPage() {
-  const router = useRouter()
+  const { login } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(false)
@@ -43,8 +42,7 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
     try {
-      await apiLogin(email, password)
-      router.push('/dashboard')
+      await login(email, password)
     } catch (err: unknown) {
       const axiosErr = err as AxiosError<{ message: string; errors?: Record<string, string[]> }>
       const msg = axiosErr.response?.data?.errors?.email?.[0]

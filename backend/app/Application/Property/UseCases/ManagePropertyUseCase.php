@@ -45,4 +45,9 @@ class ManagePropertyUseCase
 
         $this->propertyRepository->delete($property);
     }
+
+    public function getLocations(?string $search = null): array
+    {
+        return $this->propertyRepository->getDistinctLocations($search);
+    }
 }

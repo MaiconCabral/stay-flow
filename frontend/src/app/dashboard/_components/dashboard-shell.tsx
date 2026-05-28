@@ -17,18 +17,29 @@ import Sidebar from './sidebar'
 import Header from './header'
 import MobileNav from './mobile-nav'
 
-const drawerLinks = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/dashboard/imoveis', label: 'Imóveis', icon: Building2 },
-  { href: '/dashboard/reservas', label: 'Reservas', icon: CalendarCheck },
-  { href: '/dashboard/mensagens', label: 'Mensagens', icon: MessageSquare },
-  { href: '/dashboard/ganhos', label: 'Ganhos', icon: DollarSign },
-  { href: '/dashboard/configuracoes', label: 'Configurações', icon: Settings },
-]
+function getDrawerLinks(isHost: boolean) {
+  const links = [
+    { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  ]
+  if (isHost) {
+    links.push({ href: '/dashboard/imoveis', label: 'Imóveis', icon: Building2 })
+  }
+  links.push(
+    { href: '/dashboard/reservas', label: isHost ? 'Reservas' : 'Minhas Viagens', icon: CalendarCheck },
+    { href: '/dashboard/mensagens', label: 'Mensagens', icon: MessageSquare },
+  )
+  if (isHost) {
+    links.push({ href: '/dashboard/ganhos', label: 'Ganhos', icon: DollarSign })
+  }
+  links.push({ href: '/dashboard/configuracoes', label: 'Configurações', icon: Settings })
+  return links
+}
 
 function DrawerNav({ onClose }: { onClose: () => void }) {
   const pathname = usePathname()
-  const { logout } = useAuth()
+  const { user, logout } = useAuth()
+  const isHost = user?.is_host ?? false
+  const drawerLinks = getDrawerLinks(isHost)
 
   return (
     <nav className="flex flex-col h-full">

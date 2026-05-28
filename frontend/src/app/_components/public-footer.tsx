@@ -1,8 +1,8 @@
 import Link from 'next/link'
 
 const quickLinks = [
-  { href: '#', label: 'Descobrir' },
-  { href: '#', label: 'Destinos Populares' },
+  { href: '/descobrir', label: 'Descobrir' },
+  { href: '/destinos', label: 'Destinos Populares' },
   { href: '#', label: 'Para Anfitriões' },
   { href: '#', label: 'Central de Ajuda' },
 ]

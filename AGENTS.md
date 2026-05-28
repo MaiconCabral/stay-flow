@@ -92,3 +92,39 @@ Performance:
 - Do not commit .env files
 - Keep dependencies updated
 - Run tests before commits
+
+# Reservation Module Integration Status
+
+## Integrated (Working)
+
+### Public Booking Flow
+- `src/lib/availability.ts` — full CRUD + availability check API
+- `src/lib/reservation.ts` — added `updateReservation()`, `deleteReservation()`
+- `src/app/imoveis/[id]/page.tsx` — "Reservar" button now calls `createReservation()`; auth guard redirects to login; `checkAvailability()` validates dates in real-time; loading/error/success states; price computed client-side (backend auto-calculates on submit)
+
+### Dashboard — Imóvel Detail
+- `src/app/dashboard/imoveis/[id]/page.tsx` — fetches reservations via `fetchReservations({ property_id })`; real stats (receita, reservas, ocupação 30d); upcoming events (check-in/check-out); revenue chart (6 months); bookings table
+
+### Dashboard — Ganhos
+- `src/app/dashboard/ganhos/page.tsx` — fetches reservations + properties; computes total/net revenue, average ticket, pending payouts; monthly gross/net chart; revenue by property; transactions table with search
+
+### Dashboard — Reservas
+- `src/app/dashboard/reservas/page.tsx` — FullCalendar + list view; real data; cancel flow in modal (via `cancelReservation`)
+
+### Dashboard — Overview
+- `src/app/dashboard/page.tsx` — real stats from reservations/properties API (receita, reservas ativas, ocupação, imóveis ativos); revenue chart; recent bookings; upcoming events; property performance
+
+## Pending / Not Yet Built
+
+### Availability Management UI (property form)
+- Backend has full CRUD at `/api/availabilities`
+- No frontend UI to block/unblock dates for a property
+- Future: add calendar picker in property detail or property form
+
+### Earnings Export
+- "Exportar" button in `ganhos/page.tsx` is decorative
+- Future: CSV/PDF export
+
+### Pagination
+- Reservations and earnings pages fetch `per_page: 100`/`200` with no pagination UI
+- Future: add page controls or infinite scroll

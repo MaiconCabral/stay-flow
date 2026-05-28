@@ -26,6 +26,16 @@ class ReservationController
             'price_min', 'price_max',
             'sort_field', 'sort_direction',
         ]);
+
+        // Auto-filter by role
+        $user = $request->user();
+        if ($user->isHost() && ! $user->isAdmin()) {
+            $propertyIds = \App\Domain\Property\Property::where('host_id', $user->id)->pluck('id');
+            $filters['property_ids'] = $propertyIds->toArray();
+        } elseif (! $user->isHost()) {
+            $filters['guest_id'] = $user->id;
+        }
+
         $perPage = $request->input('per_page', 15);
 
         $reservations = $this->reservationService->list($filters, $perPage);

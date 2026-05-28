@@ -1,10 +1,12 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { Search, SlidersHorizontal, Home, Plus, ChevronLeft, ChevronRight, X, RotateCcw } from 'lucide-react'
 import Link from 'next/link'
 import PropertyCard from '../_components/property-card'
 import { fetchProperties, type PropertyResource, type PaginationMeta } from '@/lib/property'
+import { useAuth } from '@/contexts/AuthContext'
 
 const propertyTypeOptions = [
   { value: 'house', label: 'Casa' },
@@ -77,6 +79,15 @@ function filtersToParams(f: FilterState): Record<string, unknown> {
 }
 
 export default function ImoveisPage() {
+  const { user } = useAuth()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (user && !user.is_host) {
+      router.push('/dashboard')
+    }
+  }, [user, router])
+
   const [properties, setProperties] = useState<PropertyResource[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)

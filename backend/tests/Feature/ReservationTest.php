@@ -54,7 +54,7 @@ class ReservationTest extends TestCase
 
     public function test_can_list_reservations(): void
     {
-        Reservation::factory()->count(3)->create();
+        Reservation::factory()->count(3)->create(['guest_id' => $this->guest->id]);
 
         $response = $this->withAuth()->getJson('/api/reservations');
 
@@ -64,8 +64,8 @@ class ReservationTest extends TestCase
 
     public function test_can_filter_reservations_by_status(): void
     {
-        Reservation::factory()->count(2)->create(['property_id' => $this->property->id]);
-        Reservation::factory()->cancelled()->create(['property_id' => $this->property->id]);
+        Reservation::factory()->count(2)->create(['property_id' => $this->property->id, 'guest_id' => $this->guest->id]);
+        Reservation::factory()->cancelled()->create(['property_id' => $this->property->id, 'guest_id' => $this->guest->id]);
 
         $response = $this->withAuth()->getJson('/api/reservations?status=cancelled');
 
@@ -76,8 +76,8 @@ class ReservationTest extends TestCase
     public function test_can_filter_reservations_by_property(): void
     {
         $otherProperty = Property::factory()->create();
-        Reservation::factory()->create(['property_id' => $this->property->id]);
-        Reservation::factory()->create(['property_id' => $otherProperty->id]);
+        Reservation::factory()->create(['property_id' => $this->property->id, 'guest_id' => $this->guest->id]);
+        Reservation::factory()->create(['property_id' => $otherProperty->id, 'guest_id' => $this->guest->id]);
 
         $response = $this->withAuth()->getJson('/api/reservations?property_id=' . $this->property->id);
 
@@ -89,7 +89,7 @@ class ReservationTest extends TestCase
 
     public function test_can_show_reservation(): void
     {
-        $reservation = Reservation::factory()->create();
+        $reservation = Reservation::factory()->create(['guest_id' => $this->guest->id]);
 
         $response = $this->withAuth()->getJson("/api/reservations/{$reservation->id}");
 

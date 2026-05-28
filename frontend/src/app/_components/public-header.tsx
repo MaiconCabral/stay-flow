@@ -6,9 +6,8 @@ import { Menu, X } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 
 const navLinks = [
-  { href: '#', label: 'Descobrir' },
-  { href: '#', label: 'Destinos' },
-  { href: '#', label: 'Para AnfitriÃµes' },
+  { href: '/descobrir', label: 'Descobrir' },
+  { href: '/destinos', label: 'Destinos' },
 ]
 
 export default function PublicHeader() {

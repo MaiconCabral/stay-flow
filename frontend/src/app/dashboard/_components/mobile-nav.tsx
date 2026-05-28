@@ -8,18 +8,36 @@ import {
   CalendarCheck,
   MessageSquare,
   DollarSign,
+  MapPin,
 } from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
 
-const navItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/dashboard/imoveis', label: 'Imóveis', icon: Building2 },
-  { href: '/dashboard/reservas', label: 'Reservas', icon: CalendarCheck },
-  { href: '/dashboard/mensagens', label: 'Msgs', icon: MessageSquare },
-  { href: '/dashboard/ganhos', label: 'Ganhos', icon: DollarSign },
-]
+function getMobileNavItems(isHost: boolean) {
+  const items = [
+    { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  ]
+
+  if (isHost) {
+    items.push({ href: '/dashboard/imoveis', label: 'Imóveis', icon: Building2 })
+  }
+
+  items.push(
+    { href: '/dashboard/reservas', label: isHost ? 'Reservas' : 'Viagens', icon: CalendarCheck },
+    { href: '/dashboard/mensagens', label: 'Msgs', icon: MessageSquare },
+  )
+
+  if (isHost) {
+    items.push({ href: '/dashboard/ganhos', label: 'Ganhos', icon: DollarSign })
+  }
+
+  return items
+}
 
 export default function MobileNav() {
   const pathname = usePathname()
+  const { user } = useAuth()
+  const isHost = user?.is_host ?? false
+  const navItems = getMobileNavItems(isHost)
 
   return (
     <nav className="lg:hidden fixed bottom-0 left-0 right-0 h-16 bg-card border-t border-border z-30 px-2">

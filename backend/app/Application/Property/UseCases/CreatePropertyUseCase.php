@@ -56,6 +56,13 @@ class CreatePropertyUseCase
 
         $this->propertyRepository->save($property);
 
+        // Auto-promote user to host on first property creation
+        if (! $host->isHost()) {
+            $host->is_host = true;
+            $host->role = \App\Domain\User\ValueObjects\UserRole::Host;
+            $this->userRepository->save($host);
+        }
+
         return $property;
     }
 }

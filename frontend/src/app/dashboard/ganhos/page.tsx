@@ -1,8 +1,10 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { DollarSign, TrendingUp, Percent, Clock, Search, Download } from 'lucide-react'
 import { fetchEarnings, type EarningsData } from '@/lib/earnings'
+import { useAuth } from '@/contexts/AuthContext'
 
 const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
@@ -38,6 +40,15 @@ const paymentStatusLabel: Record<string, string> = {
 }
 
 export default function GanhosPage() {
+  const { user } = useAuth()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (user && !user.is_host) {
+      router.push('/dashboard')
+    }
+  }, [user, router])
+
   const [earningsData, setEarningsData] = useState<EarningsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)

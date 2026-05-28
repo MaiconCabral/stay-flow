@@ -1,140 +1,82 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
-import { Search, MapPin, Star, Users, Bed, Bath, ChevronRight, SlidersHorizontal } from 'lucide-react'
-import Link from 'next/link'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
+import { Search, MapPin, CalendarDays, X, Loader2 } from 'lucide-react'
 import PublicHeader from './_components/public-header'
 import PublicFooter from './_components/public-footer'
 import { fetchProperties, type PropertyResource } from '@/lib/property'
-
-const categories = [
-  { key: 'all', label: 'Todos' },
-  { key: 'Praia', label: 'Praia' },
-  { key: 'Montanha', label: 'Montanha' },
-  { key: 'Centro', label: 'Centro' },
-  { key: 'Cobertura', label: 'Cobertura' },
-  { key: 'Sítio', label: 'Sítio' },
-  { key: 'Chalé', label: 'Chalé' },
-  { key: 'Studio', label: 'Studio' },
-]
-
-const categoryKeywords: Record<string, string[]> = {
-  Praia: ['Praia', 'praia', 'Ubatuba', 'praia', 'beach'],
-  Montanha: ['Montanha', 'montanha', 'Serra', 'serra', 'Campos do Jordão', 'montanha'],
-  Centro: ['Centro', 'centro', 'Centro Histórico'],
-  Cobertura: ['Cobertura', 'cobertura'],
-  Sítio: ['Sítio', 'sítio', 'Sitio', 'sitio', 'Atibaia'],
-  Chalé: ['Chalé', 'chalé', 'Chale', 'chale'],
-  Studio: ['Studio', 'studio', 'Vila Olímpia'],
-}
-
-const bgColors = [
-  'from-blue-100 to-cyan-100 text-blue-700',
-  'from-emerald-100 to-teal-100 text-emerald-700',
-  'from-amber-100 to-yellow-100 text-amber-700',
-  'from-violet-100 to-purple-100 text-violet-700',
-  'from-rose-100 to-pink-100 text-rose-700',
-  'from-cyan-100 to-sky-100 text-cyan-700',
-  'from-orange-100 to-amber-100 text-orange-700',
-  'from-teal-100 to-green-100 text-teal-700',
-]
-
-function getColor(index: number) {
-  return bgColors[index % bgColors.length]
-}
-
-function PropertyCard({ property, index }: { property: PropertyResource; index: number }) {
-  const location = [property.city, property.state].filter(Boolean).join(', ')
-  const initials = property.title.slice(0, 2).toUpperCase()
-
-  return (
-    <div className="bg-card rounded-xl border border-border overflow-hidden hover:shadow-lg transition-all duration-200 group">
-      <div className={`h-44 flex items-center justify-center bg-gradient-to-br ${getColor(index)} relative`}>
-        {property.cover_image?.image_url ? (
-          <img
-            src={property.cover_image.image_url}
-            alt={property.title}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <>
-            <span className="text-5xl font-bold opacity-15 select-none">{initials}</span>
-            <span className="absolute text-3xl font-bold tracking-wider opacity-70 select-none">{initials}</span>
-          </>
-        )}
-      </div>
-
-      <div className="p-4 space-y-3">
-        <div>
-          <div className="flex items-start justify-between gap-2">
-            <h3 className="text-sm font-semibold text-text-primary group-hover:text-primary transition-colors">
-              {property.title}
-            </h3>
-            <div className="flex items-center gap-0.5 text-xs font-medium text-text-secondary flex-shrink-0">
-              <Star size={12} className="text-amber-400" />
-              {property.property_type_label}
-            </div>
-          </div>
-          <p className="text-xs text-text-secondary flex items-center gap-1 mt-0.5">
-            <MapPin size={11} />
-            {location || property.country}
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-text-secondary">
-          <span className="flex items-center gap-1">
-            <Users size={13} />
-            {property.max_guests} hóspedes
-          </span>
-          <span className="flex items-center gap-1">
-            <Bed size={13} />
-            {property.bedrooms} quartos
-          </span>
-          <span className="flex items-center gap-1">
-            <Bath size={13} />
-            {property.bathrooms} banheiros
-          </span>
-        </div>
-
-        <div className="flex items-end justify-between pt-2 border-t border-border">
-          <div>
-            <p className="text-lg font-bold text-text-primary">
-              R$ {property.price_per_night.toLocaleString('pt-BR')}
-            </p>
-            <p className="text-[11px] text-text-secondary">por noite</p>
-          </div>
-          <Link
-            href={`/imoveis/${property.id}`}
-            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-semibold hover:bg-primary hover:text-white transition-colors"
-          >
-            Detalhes
-            <ChevronRight size={13} />
-          </Link>
-        </div>
-      </div>
-    </div>
-  )
-}
+import { fetchLocations, type LocationResult } from '@/lib/location'
+import { PropertyCard } from './_components/property-card'
+import { CategoryFilters } from './_components/category-filters'
+import { PropertyFilters, type FilterValues } from './_components/property-filters'
+import { categoryKeywords } from './_components/categories'
 
 export default function Home() {
   const [activeCategory, setActiveCategory] = useState('all')
   const [properties, setProperties] = useState<PropertyResource[]>([])
   const [loading, setLoading] = useState(true)
+  const [destination, setDestination] = useState('')
+  const [checkIn, setCheckIn] = useState('')
+  const [checkOut, setCheckOut] = useState('')
+  const [suggestions, setSuggestions] = useState<LocationResult[]>([])
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false)
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false)
+  const [searched, setSearched] = useState(false)
+  const [searchKey, setSearchKey] = useState(0)
+  const [showFilters, setShowFilters] = useState(false)
+  const [filterPriceMin, setFilterPriceMin] = useState('')
+  const [filterPriceMax, setFilterPriceMax] = useState('')
+  const [filterType, setFilterType] = useState('')
+  const [filterBedrooms, setFilterBedrooms] = useState('')
+  const [filterGuests, setFilterGuests] = useState('')
+  const [filterSort, setFilterSort] = useState('created_at')
+  const [filterDir, setFilterDir] = useState('desc')
+  const [selectedCity, setSelectedCity] = useState('')
+  const [selectedState, setSelectedState] = useState('')
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const sentinelRef = useRef<HTMLDivElement>(null)
+  const resultsRef = useRef<HTMLDivElement>(null)
+  const destRef = useRef<HTMLInputElement>(null)
+  const suggestDebounce = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+
+  const buildParams = useCallback((pageNum: number) => {
+    const params: Record<string, unknown> = { status: 'available', per_page: 12, page: pageNum }
+    if (searched && destination) {
+      if (selectedCity && selectedState) {
+        params.city = selectedCity
+        params.state = selectedState
+      } else {
+        params.search = destination
+      }
+    }
+    if (searched && checkIn) params.check_in = checkIn
+    if (searched && checkOut) params.check_out = checkOut
+    if (filterType) params.property_type = filterType
+    if (filterPriceMin) params.price_min = Number(filterPriceMin)
+    if (filterPriceMax) params.price_max = Number(filterPriceMax)
+    if (filterBedrooms) params.bedrooms = Number(filterBedrooms)
+    if (filterGuests) params.max_guests = Number(filterGuests)
+    params.sort_field = filterSort
+    params.sort_direction = filterDir
+    return params
+  }, [searched, destination, selectedCity, selectedState, checkIn, checkOut, filterType, filterPriceMin, filterPriceMax, filterBedrooms, filterGuests, filterSort, filterDir])
 
   useEffect(() => {
     let cancelled = false
-    fetchProperties({ status: 'available', per_page: 20 })
+    setHasMore(false)
+    const params = buildParams(1)
+    fetchProperties(params as Parameters<typeof fetchProperties>[0])
       .then((res) => {
-        if (!cancelled) setProperties(res.data)
+        if (!cancelled) {
+          setProperties(res.data)
+          setHasMore(res.meta.current_page < res.meta.last_page)
+        }
       })
-      .catch(() => {
-        if (!cancelled) setProperties([])
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
+      .catch(() => { if (!cancelled) setProperties([]) })
+      .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [])
+  }, [searchKey, buildParams])
 
   const filtered = useMemo(() => {
     if (activeCategory === 'all') return properties
@@ -150,6 +92,108 @@ export default function Home() {
       )
     )
   }, [activeCategory, properties])
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return
+    setLoadingMore(true)
+    const nextPage = Math.floor(properties.length / 12) + 1
+    const params = buildParams(nextPage)
+    try {
+      const res = await fetchProperties(params as Parameters<typeof fetchProperties>[0])
+      setProperties(prev => [...prev, ...res.data])
+      setHasMore(res.meta.current_page < res.meta.last_page)
+    } catch {
+      // silent
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [loadingMore, hasMore, properties.length, buildParams])
+
+  const loadMoreRef = useRef(loadMore)
+  loadMoreRef.current = loadMore
+
+  useEffect(() => {
+    if (!hasMore || loadingMore) return
+    const sentinel = sentinelRef.current
+    if (!sentinel) return
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) loadMoreRef.current() },
+      { rootMargin: '200px' }
+    )
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [hasMore, loadingMore])
+
+  // Autocomplete debounce
+  useEffect(() => {
+    if (!destination || destination.length < 2) {
+      setSuggestions([])
+      setSuggestionsOpen(false)
+      return
+    }
+    clearTimeout(suggestDebounce.current)
+    setSuggestionsLoading(true)
+    suggestDebounce.current = setTimeout(async () => {
+      try {
+        const result = await fetchLocations(destination)
+        setSuggestions(result)
+        setSuggestionsOpen(result.length > 0)
+      } catch {
+        setSuggestions([])
+      } finally {
+        setSuggestionsLoading(false)
+      }
+    }, 300)
+    return () => clearTimeout(suggestDebounce.current)
+  }, [destination])
+
+  const handleSearch = useCallback(() => {
+    if (!destination.trim()) return
+    setSearched(true)
+    setSearchKey((k) => k + 1)
+    setActiveCategory('all')
+    setSuggestionsOpen(false)
+    setTimeout(() => {
+      resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 100)
+  }, [destination])
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleSearch()
+  }, [handleSearch])
+
+  // Reset to "all" when search terms change
+  useEffect(() => {
+    if (searched && !destination) {
+      setSearched(false)
+    }
+  }, [searched, destination])
+
+  const today = new Date().toISOString().split('T')[0]
+
+  const filterValues: FilterValues = {
+    filterType, filterPriceMin, filterPriceMax,
+    filterBedrooms, filterGuests, filterSort, filterDir,
+  }
+
+  const onFilterChange = useCallback((field: keyof FilterValues, value: string) => {
+    const setters: Record<string, (v: string) => void> = {
+      filterType: setFilterType,
+      filterPriceMin: setFilterPriceMin,
+      filterPriceMax: setFilterPriceMax,
+      filterBedrooms: setFilterBedrooms,
+      filterGuests: setFilterGuests,
+      filterSort: setFilterSort,
+      filterDir: setFilterDir,
+    }
+    setters[field]?.(value)
+  }, [])
+
+  const onClearFilters = useCallback(() => {
+    setFilterType(''); setFilterPriceMin(''); setFilterPriceMax('')
+    setFilterBedrooms(''); setFilterGuests('')
+    setFilterSort('created_at'); setFilterDir('desc')
+  }, [])
 
   return (
     <div className="min-h-screen bg-surface flex flex-col">
@@ -225,32 +269,94 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="mt-8 lg:mt-10 w-full max-w-2xl">
+            <div className="mt-8 lg:mt-10 w-full max-w-3xl">
               <div className="bg-card rounded-xl p-2 shadow-xl border border-white/10">
                 <div className="flex flex-col sm:flex-row gap-2">
+                  <div className="relative flex-1">
+                    <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-surface border border-border">
+                      <MapPin size={16} className="text-text-secondary flex-shrink-0" />
+                      <input
+                        ref={destRef}
+                        type="text"
+                        value={destination}
+                        onChange={(e) => setDestination(e.target.value)}
+                        onFocus={() => { if (suggestions.length > 0) setSuggestionsOpen(true) }}
+                        onBlur={() => setTimeout(() => setSuggestionsOpen(false), 200)}
+                        onKeyDown={handleKeyDown}
+                        placeholder="Para onde vai?"
+                        className="w-full bg-transparent border-none outline-none text-sm text-text-primary placeholder:text-text-secondary"
+                      />
+                      {destination && (
+                        <button onClick={() => { setDestination(''); setSelectedCity(''); setSelectedState(''); setSuggestionsOpen(false) }} className="shrink-0 text-text-secondary hover:text-text-primary transition-colors">
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                    {/* Autocomplete dropdown */}
+                    {suggestionsOpen && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-xl z-20 overflow-hidden">
+                        {suggestionsLoading ? (
+                          <div className="flex items-center justify-center py-4">
+                            <Loader2 size={16} className="animate-spin text-text-secondary" />
+                          </div>
+                        ) : (
+                          suggestions.map((loc) => (
+                            <button
+                              key={`${loc.city}-${loc.state}`}
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault()
+                                setDestination(`${loc.city}, ${loc.state}`)
+                                setSelectedCity(loc.city)
+                                setSelectedState(loc.state)
+                                setSuggestionsOpen(false)
+                              }}
+                              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-surface transition-colors text-left"
+                            >
+                              <MapPin size={14} className="text-text-secondary shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-text-primary truncate">
+                                  {loc.city}, {loc.state}
+                                </p>
+                              </div>
+                              <span className="text-xs text-text-secondary shrink-0 whitespace-nowrap">
+                                {loc.property_count} {loc.property_count === 1 ? 'imóvel' : 'imóveis'}
+                              </span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
                   <div className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-lg bg-surface border border-border">
-                    <Search size={16} className="text-text-secondary flex-shrink-0" />
+                    <CalendarDays size={16} className="text-text-secondary flex-shrink-0" />
                     <input
-                      type="text"
-                      placeholder="Para onde vai?"
-                      className="w-full bg-transparent border-none outline-none text-sm text-text-primary placeholder:text-text-secondary"
+                      type="date"
+                      value={checkIn}
+                      min={today}
+                      onChange={(e) => {
+                        setCheckIn(e.target.value)
+                        if (checkOut && e.target.value >= checkOut) setCheckOut('')
+                      }}
+                      onKeyDown={handleKeyDown}
+                      className="w-full bg-transparent border-none outline-none text-sm text-text-primary [color-scheme:dark]"
                     />
                   </div>
                   <div className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-lg bg-surface border border-border">
+                    <CalendarDays size={16} className="text-text-secondary flex-shrink-0" />
                     <input
-                      type="text"
-                      placeholder="Check-in"
-                      className="w-full bg-transparent border-none outline-none text-sm text-text-primary placeholder:text-text-secondary"
+                      type="date"
+                      value={checkOut}
+                      min={checkIn || today}
+                      onChange={(e) => setCheckOut(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      className="w-full bg-transparent border-none outline-none text-sm text-text-primary [color-scheme:dark]"
                     />
                   </div>
-                  <div className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-lg bg-surface border border-border">
-                    <input
-                      type="text"
-                      placeholder="Check-out"
-                      className="w-full bg-transparent border-none outline-none text-sm text-text-primary placeholder:text-text-secondary"
-                    />
-                  </div>
-                  <button className="w-full sm:w-auto px-6 py-2.5 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-colors whitespace-nowrap">
+                  <button
+                    onClick={handleSearch}
+                    className="w-full sm:w-auto px-6 py-2.5 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-colors whitespace-nowrap"
+                  >
                     Buscar
                   </button>
                 </div>
@@ -273,30 +379,31 @@ export default function Home() {
         </section>
 
         {/* Filters + Listing */}
-        <section className="max-w-7xl mx-auto px-4 lg:px-6 py-8 lg:py-12">
+        <section ref={resultsRef} className="max-w-7xl mx-auto px-4 lg:px-6 py-8 lg:py-12">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
             <div>
-              <h2 className="text-lg font-semibold text-text-primary">Imóveis em destaque</h2>
+              <h2 className="text-lg font-semibold text-text-primary">
+                {searched && destination ? `Imóveis em ${destination}` : 'Imóveis em destaque'}
+              </h2>
               <p className="text-sm text-text-secondary">
                 {loading ? 'Carregando...' : `${filtered.length} imóveis disponíveis`}
               </p>
             </div>
-            <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto scrollbar-none">
-              {categories.map((cat) => (
-                <button
-                  key={cat.key}
-                  onClick={() => setActiveCategory(cat.key)}
-                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors duration-150 ${
-                    activeCategory === cat.key
-                      ? 'bg-primary text-white'
-                      : 'bg-card text-text-secondary border border-border hover:bg-surface hover:text-text-primary'
-                  }`}
-                >
-                  {cat.label}
-                </button>
-              ))}
-            </div>
+            <CategoryFilters
+              activeCategory={activeCategory}
+              onCategoryChange={setActiveCategory}
+              showFilters={showFilters}
+              onToggleFilters={() => setShowFilters((v) => !v)}
+            />
           </div>
+
+          {showFilters && (
+            <PropertyFilters
+              values={filterValues}
+              onChange={onFilterChange}
+              onClear={onClearFilters}
+            />
+          )}
 
           {loading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
@@ -338,12 +445,11 @@ export default function Home() {
                 ))}
               </div>
 
-              {filtered.length > 8 && (
-                <div className="flex justify-center mt-10">
-                  <button className="flex items-center gap-2 px-6 py-2.5 rounded-lg border border-border bg-card text-text-secondary text-sm font-medium hover:bg-surface hover:text-text-primary transition-colors">
-                    Ver mais imóveis
-                    <ChevronRight size={16} />
-                  </button>
+              {hasMore && (
+                <div ref={sentinelRef} className="flex justify-center py-8">
+                  {loadingMore && (
+                    <Loader2 size={20} className="animate-spin text-text-secondary" />
+                  )}
                 </div>
               )}
             </>

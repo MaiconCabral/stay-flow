@@ -65,15 +65,12 @@ export default function ReservasPage() {
   const [activeTab, setActiveTab] = useState('all')
   const [search, setSearch] = useState('')
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar')
-  const [viewFilter, setViewFilter] = useState<'host' | 'guest'>('host')
+  const [viewFilter, setViewFilter] = useState<'host' | 'guest'>(user?.is_host ? 'host' : 'guest')
   const [selectedReservation, setSelectedReservation] = useState<ReservationResource | null>(null)
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    if (params.get('view') === 'guest') {
-      setViewFilter('guest')
-    }
-  }, [])
+    setViewFilter(user?.is_host ? 'host' : 'guest')
+  }, [user?.is_host])
 
   useEffect(() => {
     let cancelled = false
@@ -184,7 +181,7 @@ export default function ReservasPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold text-text-primary">Reservas</h1>
+          <h1 className="text-lg font-semibold text-text-primary">{viewFilter === 'guest' ? 'Minhas Viagens' : 'Reservas'}</h1>
           <p className="text-sm text-text-secondary">{reservations.length} no total</p>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -192,7 +189,7 @@ export default function ReservasPage() {
             <Search size={16} />
             <input
               type="text"
-              placeholder="Buscar hóspede ou imóvel..."
+              placeholder={viewFilter === 'guest' ? "Buscar imóvel..." : "Buscar hóspede ou imóvel..."}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="bg-transparent border-none outline-none w-28 sm:w-44 text-text-primary placeholder:text-text-secondary"
@@ -207,33 +204,35 @@ export default function ReservasPage() {
         </div>
       </div>
 
-      {/* View Filter (Host / Guest) */}
-      <div className="flex items-center gap-2">
-        <div className="flex bg-card border border-border rounded-lg overflow-hidden">
-          <button
-            onClick={() => { setViewFilter('host'); setActiveTab('all'); setSearch('') }}
-            className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors duration-150 ${
-              viewFilter === 'host'
-                ? 'bg-primary text-white'
-                : 'text-text-secondary hover:text-text-primary'
-            }`}
-          >
-            <Building2 size={16} />
-            <span className="hidden sm:inline">Anfitrião</span>
-          </button>
-          <button
-            onClick={() => { setViewFilter('guest'); setActiveTab('all'); setSearch('') }}
-            className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors duration-150 ${
-              viewFilter === 'guest'
-                ? 'bg-primary text-white'
-                : 'text-text-secondary hover:text-text-primary'
-            }`}
-          >
-            <User size={16} />
-            <span className="hidden sm:inline">Hóspede</span>
-          </button>
+      {/* View Filter (Host / Guest) — only show toggle for hosts */}
+      {user?.is_host && (
+        <div className="flex items-center gap-2">
+          <div className="flex bg-card border border-border rounded-lg overflow-hidden">
+            <button
+              onClick={() => { setViewFilter('host'); setActiveTab('all'); setSearch('') }}
+              className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors duration-150 ${
+                viewFilter === 'host'
+                  ? 'bg-primary text-white'
+                  : 'text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              <Building2 size={16} />
+              <span className="hidden sm:inline">Anfitrião</span>
+            </button>
+            <button
+              onClick={() => { setViewFilter('guest'); setActiveTab('all'); setSearch('') }}
+              className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors duration-150 ${
+                viewFilter === 'guest'
+                  ? 'bg-primary text-white'
+                  : 'text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              <User size={16} />
+              <span className="hidden sm:inline">Hóspede</span>
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Tabs + View Toggle */}
       <div className="flex items-center justify-between gap-3">

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useAuth } from '@/contexts/AuthContext'
 import StatsCards from './_components/stats-cards'
 import type { StatCardData } from './_components/stats-cards'
 import RevenueChart from './_components/revenue-chart'
@@ -10,6 +11,8 @@ import UpcomingEvents from './_components/upcoming-events'
 import type { EventData } from './_components/upcoming-events'
 import PropertyOverview from './_components/property-overview'
 import type { PropertySummary } from './_components/property-overview'
+import GuestUpcomingTrips from './_components/guest-upcoming-trips'
+import GuestOverview from './_components/guest-overview'
 import { fetchReservations, type ReservationResource } from '@/lib/reservation'
 import { fetchProperties, type PropertyResource } from '@/lib/property'
 import { fetchEarnings, type EarningsData } from '@/lib/earnings'
@@ -28,7 +31,6 @@ function computeDashboardData(reservations: ReservationResource[], properties: P
     (r) => r.status === 'confirmed' || r.status === 'completed'
   )
 
-  // Revenue from earnings API
   const currentMonthIdx = now.getMonth() + 1
   const prevMonthIdx = currentMonthIdx === 1 ? 12 : currentMonthIdx - 1
   const prevMonthYear = currentMonthIdx === 1 ? now.getFullYear() - 1 : now.getFullYear()
@@ -44,7 +46,6 @@ function computeDashboardData(reservations: ReservationResource[], properties: P
   const prevRevenue = prevMonthData?.gross ?? 0
   const revenueChange = prevRevenue > 0 ? ((currentRevenue - prevRevenue) / prevRevenue) * 100 : 0
 
-  // Active reservations (confirmed or pending with future/current check-in)
   const activeReservations = reservations.filter(
     (r) => isActiveReservation(r) && r.check_in >= today
   ).length
@@ -60,7 +61,6 @@ function computeDashboardData(reservations: ReservationResource[], properties: P
     ? ((activeReservations - prevActiveCount) / prevActiveCount) * 100
     : 0
 
-  // Occupancy rate for next 30 days
   const activeProps = properties.filter((p) => p.status === 'active')
   const totalSlots = activeProps.length * 30
   let bookedSlots = 0
@@ -76,7 +76,6 @@ function computeDashboardData(reservations: ReservationResource[], properties: P
   }
   const occupancyRate = totalSlots > 0 ? Math.round((bookedSlots / totalSlots) * 100) : 0
 
-  // Revenue trend for occupancy (compare next-30-days occupancy with last-30-days)
   let prevBookedSlots = 0
   for (let i = 30; i < 60; i++) {
     const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i)
@@ -188,7 +187,7 @@ function computeDashboardData(reservations: ReservationResource[], properties: P
       name: p.title,
       location: `${p.city}, ${p.state}`,
       coverImage: p.cover_image?.image_url ?? null,
-      rating: 0, // would need reviews endpoint
+      rating: 0,
       revenue: propertyRevenueMap[p.id]?.revenue ?? 0,
       bookings: propertyRevenueMap[p.id]?.bookings ?? 0,
     }))
@@ -203,7 +202,7 @@ function computeDashboardData(reservations: ReservationResource[], properties: P
   }
 }
 
-export default function DashboardPage() {
+function HostDashboard() {
   const [reservations, setReservations] = useState<ReservationResource[]>([])
   const [properties, setProperties] = useState<PropertyResource[]>([])
   const [earnings, setEarnings] = useState<EarningsData | null>(null)
@@ -288,4 +287,20 @@ export default function DashboardPage() {
       <PropertyOverview properties={data.propertySummaries} />
     </div>
   )
+}
+
+function GuestDashboard() {
+  return (
+    <div className="space-y-5">
+      <GuestOverview />
+      <GuestUpcomingTrips />
+    </div>
+  )
+}
+
+export default function DashboardPage() {
+  const { user } = useAuth()
+  const isHost = user?.is_host ?? false
+
+  return isHost ? <HostDashboard /> : <GuestDashboard />
 }

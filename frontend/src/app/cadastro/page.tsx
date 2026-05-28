@@ -1,10 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Eye, EyeOff, Loader2, Mail, Lock, User } from 'lucide-react'
-import { register as apiRegister } from '@/lib/auth'
+import { useAuth } from '@/contexts/AuthContext'
 import type { AxiosError } from 'axios'
 
 function GoogleIcon() {
@@ -27,7 +26,7 @@ function AppleIcon() {
 }
 
 export default function CadastroPage() {
-  const router = useRouter()
+  const { register } = useAuth()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -59,8 +58,7 @@ export default function CadastroPage() {
     if (!validate()) return
     setLoading(true)
     try {
-      await apiRegister({ name, email, password, password_confirmation: confirmPassword })
-      router.push('/dashboard')
+      await register({ name, email, password, password_confirmation: confirmPassword })
     } catch (err: unknown) {
       const axiosErr = err as AxiosError<{ message: string; errors?: Record<string, string[]> }>
       const serverErrors = axiosErr.response?.data?.errors

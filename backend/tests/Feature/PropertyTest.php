@@ -13,11 +13,14 @@ class PropertyTest extends TestCase
 
     // ─── Auth ─────────────────────────────────────────────────────
 
-    public function test_unauthenticated_user_cannot_access_properties(): void
+    public function test_guest_can_browse_properties(): void
     {
+        Property::factory()->count(3)->create();
+
         $response = $this->getJson('/api/properties');
 
-        $response->assertStatus(401);
+        $response->assertStatus(200)
+            ->assertJsonStructure(['data', 'meta']);
     }
 
     // ─── List ─────────────────────────────────────────────────────
@@ -82,7 +85,7 @@ class PropertyTest extends TestCase
 
     public function test_host_can_create_property(): void
     {
-        $host = User::factory()->create();
+        $host = User::factory()->host()->create();
         $token = $host->createToken('test')->plainTextToken;
 
         $response = $this->withHeader('Authorization', "Bearer {$token}")
@@ -106,7 +109,7 @@ class PropertyTest extends TestCase
 
     public function test_can_update_property(): void
     {
-        $host = User::factory()->create();
+        $host = User::factory()->host()->create();
         $token = $host->createToken('test')->plainTextToken;
 
         $property = Property::factory()->create(['host_id' => $host->id, 'title' => 'Nome Antigo']);
@@ -126,7 +129,7 @@ class PropertyTest extends TestCase
 
     public function test_can_delete_property(): void
     {
-        $host = User::factory()->create();
+        $host = User::factory()->host()->create();
         $token = $host->createToken('test')->plainTextToken;
 
         $property = Property::factory()->create(['host_id' => $host->id]);
@@ -143,7 +146,7 @@ class PropertyTest extends TestCase
 
     public function test_store_validates_required_fields(): void
     {
-        $host = User::factory()->create();
+        $host = User::factory()->host()->create();
         $token = $host->createToken('test')->plainTextToken;
 
         $response = $this->withHeader('Authorization', "Bearer {$token}")
@@ -155,7 +158,7 @@ class PropertyTest extends TestCase
 
     public function test_store_validates_unique_slug(): void
     {
-        $host = User::factory()->create();
+        $host = User::factory()->host()->create();
         $token = $host->createToken('test')->plainTextToken;
 
         Property::factory()->create(['slug' => 'casa-na-praia']);

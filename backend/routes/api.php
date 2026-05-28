@@ -3,6 +3,7 @@
 use App\Interfaces\Http\Controllers\Api\AuthController;
 use App\Interfaces\Http\Controllers\Api\AvailabilityController;
 use App\Interfaces\Http\Controllers\Api\ConversationController;
+use App\Interfaces\Http\Controllers\Api\DashboardController;
 use App\Interfaces\Http\Controllers\Api\EarningsController;
 use App\Interfaces\Http\Controllers\Api\LeadController;
 use App\Interfaces\Http\Controllers\Api\MessageController;
@@ -20,8 +21,9 @@ use Illuminate\Support\Facades\Route;
 Route::post('/auth/register', [AuthController::class, 'register']);
 Route::post('/auth/login', [AuthController::class, 'login']);
 
-// Public property routes (list + detail)
+// Public property routes (list + detail + locations)
 Route::get('properties', [PropertyController::class, 'index']);
+Route::get('properties/locations', [PropertyController::class, 'locations']);
 Route::get('properties/{property}', [PropertyController::class, 'show']);
 
 Route::middleware('auth:sanctum')->group(function () {
@@ -34,22 +36,23 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('users', UserController::class);
     Route::post('users/{user}/avatar', [UserController::class, 'uploadAvatar']);
 
-    // Protected property routes (create, update, delete)
-    Route::post('properties', [PropertyController::class, 'store']);
-    Route::put('properties/{property}', [PropertyController::class, 'update']);
-    Route::delete('properties/{property}', [PropertyController::class, 'destroy']);
+    // Host-only property management
+    Route::middleware('role:host')->group(function () {
+        Route::post('properties', [PropertyController::class, 'store']);
+        Route::put('properties/{property}', [PropertyController::class, 'update']);
+        Route::delete('properties/{property}', [PropertyController::class, 'destroy']);
+        Route::post('properties/{property}/images', [PropertyImageController::class, 'store']);
+        Route::delete('properties/{property}/images/{image}', [PropertyImageController::class, 'destroy']);
+        Route::put('properties/{property}/images/{image}/cover', [PropertyImageController::class, 'setCover']);
 
-    // Property images
-    Route::post('properties/{property}/images', [PropertyImageController::class, 'store']);
-    Route::delete('properties/{property}/images/{image}', [PropertyImageController::class, 'destroy']);
-    Route::put('properties/{property}/images/{image}/cover', [PropertyImageController::class, 'setCover']);
+        Route::get('earnings', [EarningsController::class, 'index']);
+    });
 
     Route::get('properties/{property}/reviews', [ReviewController::class, 'index']);
     Route::post('properties/{property}/reviews', [ReviewController::class, 'store']);
     Route::get('reviews/{review}', [ReviewController::class, 'show']);
     Route::put('reviews/{review}', [ReviewController::class, 'update']);
     Route::delete('reviews/{review}', [ReviewController::class, 'destroy']);
-    Route::get('earnings', [EarningsController::class, 'index']);
     Route::apiResource('reservations', ReservationController::class);
     Route::apiResource('leads', LeadController::class);
     Route::apiResource('payments', PaymentController::class);
@@ -83,4 +86,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
     Route::post('/notifications/{notification}/read', [NotificationController::class, 'markAsRead']);
     Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
+
+    // Dashboard stats (role-aware)
+    Route::get('/dashboard/stats', [DashboardController::class, 'stats']);
 });

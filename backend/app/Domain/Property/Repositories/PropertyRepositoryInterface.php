@@ -18,4 +18,6 @@ interface PropertyRepositoryInterface
     public function paginate(array $filters = [], int $perPage = 15): LengthAwarePaginator;
 
     public function findByHost(int $hostId, array $filters = [], int $perPage = 15): LengthAwarePaginator;
+
+    public function getDistinctLocations(?string $search = null): array;
 }

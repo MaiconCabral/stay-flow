@@ -76,6 +76,8 @@ export interface PropertyQueryParams {
   sort_direction?: string
   per_page?: number
   page?: number
+  check_in?: string
+  check_out?: string
 }
 
 export async function fetchProperties(params?: PropertyQueryParams): Promise<PropertyListResponse> {

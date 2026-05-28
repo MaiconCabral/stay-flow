@@ -12,6 +12,24 @@ class EarningsController
 {
     public function index(Request $request): JsonResponse
     {
+        $user = $request->user();
+        $propertyIds = Property::where('host_id', $user->id)->pluck('id');
+
+        if ($propertyIds->isEmpty()) {
+            return response()->json([
+                'summary' => [
+                    'total_revenue' => 0,
+                    'net_revenue' => 0,
+                    'average_ticket' => 0,
+                    'pending_payouts' => 0,
+                    'revenue_change' => 0,
+                ],
+                'monthly' => [],
+                'by_property' => [],
+                'transactions' => [],
+            ]);
+        }
+
         $months = min(max((int) $request->input('months', 6), 1), 24);
         $propertyId = $request->input('property_id');
 
@@ -21,12 +39,14 @@ class EarningsController
         $paidReservations = Reservation::with(['property', 'guest', 'payment'])
             ->whereIn('status', ['confirmed', 'completed'])
             ->where('check_in', '>=', $startDate)
+            ->whereIn('property_id', $propertyIds)
             ->when($propertyId, fn ($q) => $q->where('property_id', $propertyId))
             ->get();
 
         $pendingReservations = Reservation::with(['guest', 'property'])
             ->where('status', 'pending')
             ->where('check_in', '>=', $startDate)
+            ->whereIn('property_id', $propertyIds)
             ->when($propertyId, fn ($q) => $q->where('property_id', $propertyId))
             ->get();
 
@@ -74,7 +94,8 @@ class EarningsController
         }
 
         // --- By property ---
-        $properties = Property::where('status', 'active')
+        $properties = Property::where('host_id', $user->id)
+            ->where('status', 'active')
             ->when($propertyId, fn ($q) => $q->where('id', $propertyId))
             ->get();
 
